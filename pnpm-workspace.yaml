@@ -1,0 +1,7 @@
+allowBuilds:
+  esbuild: false
+  workerd: false
+  sharp: false
+  prisma: true
+  "@prisma/engines": true
+  "@prisma/client": true
