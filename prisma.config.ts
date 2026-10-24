@@ -8,7 +8,9 @@ export default defineConfig({
         seed: "tsx prisma/seed.ts",
     },
     datasource: {
-        // Resolved lazily by the CLI. `prisma generate` does not need a live database.
-        url: process.env.DATABASE_URL ?? "postgresql://placeholder:placeholder@localhost:5432/placeholder",
+        url:
+            process.env.DIRECT_URL ??
+            process.env.DATABASE_URL ??
+            "postgresql://placeholder:placeholder@ep-placeholder.us-east-2.aws.neon.tech/neondb?sslmode=require",
     },
 });

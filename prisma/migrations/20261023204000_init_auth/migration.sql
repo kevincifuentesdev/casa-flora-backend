@@ -1,4 +1,3 @@
--- CreateTable
 CREATE TABLE "user" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -17,7 +16,6 @@ CREATE TABLE "user" (
     CONSTRAINT "user_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
 CREATE TABLE "session" (
     "id" TEXT NOT NULL,
     "expiresAt" TIMESTAMP(3) NOT NULL,
@@ -31,7 +29,6 @@ CREATE TABLE "session" (
     CONSTRAINT "session_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
 CREATE TABLE "account" (
     "id" TEXT NOT NULL,
     "accountId" TEXT NOT NULL,
@@ -50,7 +47,6 @@ CREATE TABLE "account" (
     CONSTRAINT "account_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
 CREATE TABLE "verification" (
     "id" TEXT NOT NULL,
     "identifier" TEXT NOT NULL,
@@ -62,7 +58,6 @@ CREATE TABLE "verification" (
     CONSTRAINT "verification_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
 CREATE TABLE "jwks" (
     "id" TEXT NOT NULL,
     "publicKey" TEXT NOT NULL,
@@ -75,29 +70,20 @@ CREATE TABLE "jwks" (
     CONSTRAINT "jwks_pkey" PRIMARY KEY ("id")
 );
 
--- CreateIndex
 CREATE UNIQUE INDEX "user_email_key" ON "user"("email");
 
--- CreateIndex
 CREATE UNIQUE INDEX "user_username_key" ON "user"("username");
 
--- CreateIndex
 CREATE UNIQUE INDEX "session_token_key" ON "session"("token");
 
--- CreateIndex
 CREATE INDEX "session_userId_idx" ON "session"("userId");
 
--- CreateIndex
 CREATE INDEX "account_userId_idx" ON "account"("userId");
 
--- CreateIndex
 CREATE INDEX "verification_identifier_idx" ON "verification"("identifier");
 
--- AddForeignKey
 ALTER TABLE "session" ADD CONSTRAINT "session_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- AddForeignKey
 ALTER TABLE "account" ADD CONSTRAINT "account_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- Defense in depth: the application only knows these roles.
 ALTER TABLE "user" ADD CONSTRAINT "user_role_check" CHECK ("role" IN ('customer', 'admin'));

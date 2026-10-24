@@ -24,7 +24,6 @@ export default defineConfig(
         },
     },
     {
-        // Scripts that run in a terminal are allowed to print.
         files: ["prisma/**/*.ts", "src/server.ts", "src/infrastructure/services/logger.service.ts"],
         rules: { "no-console": "off" },
     },
