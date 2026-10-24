@@ -28,6 +28,7 @@ model User {
 
   sessions Session[]
   accounts Account[]
+  bookings Booking[]
 
   @@map("user")
 }
@@ -105,4 +106,21 @@ model Product {
 
   @@index([available, sortOrder])
   @@map("product")
+}
+
+model Booking {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  environment String   @db.VarChar(16)
+  date        String   @db.VarChar(10)
+  time        String   @db.VarChar(5)
+  diners      Int
+  status      String   @default("confirmed") @db.VarChar(16)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, date])
+  @@index([date, time, environment, status])
+  @@map("booking")
 }
