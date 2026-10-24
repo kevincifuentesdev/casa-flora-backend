@@ -90,3 +90,19 @@ model Jwks {
 
   @@map("jwks")
 }
+
+model Product {
+  id          String   @id
+  name        String
+  price       Int
+  categories  String[]
+  description String
+  imageUrl    String
+  available   Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([available, sortOrder])
+  @@map("product")
+}
