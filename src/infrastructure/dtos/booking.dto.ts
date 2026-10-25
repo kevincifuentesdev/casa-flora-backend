@@ -106,3 +106,4 @@ export function toBookingAvailabilityResponseDto(
         validTimeSlots: BOOKING_TIME_SLOTS,
     };
 }
+

@@ -13,3 +13,4 @@ export interface IUserRepository {
     findByUsername(username: string): Promise<User | null>;
     updateProfile(id: string, input: UpdateUserProfileInput): Promise<User>;
 }
+

@@ -87,3 +87,4 @@ export function toProductResponseDto(product: Product): ProductResponseDto {
         imageUrl: product.imageUrl,
     };
 }
+

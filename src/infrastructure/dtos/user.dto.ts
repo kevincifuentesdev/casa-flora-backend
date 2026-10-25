@@ -79,3 +79,4 @@ export function toUserResponseDto(user: User): UserResponseDto {
         updatedAt: user.updatedAt.toISOString(),
     };
 }
+

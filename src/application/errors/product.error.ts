@@ -11,3 +11,4 @@ export class DuplicateProductError extends ConflictError {
         super("PRODUCT_ALREADY_EXISTS", `Ya existe un plato con el identificador '${id}'.`);
     }
 }
+

@@ -21,3 +21,4 @@ CREATE INDEX "booking_userId_date_idx" ON "booking"("userId", "date");
 CREATE INDEX "booking_date_time_environment_status_idx" ON "booking"("date", "time", "environment", "status");
 
 ALTER TABLE "booking" ADD CONSTRAINT "booking_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+

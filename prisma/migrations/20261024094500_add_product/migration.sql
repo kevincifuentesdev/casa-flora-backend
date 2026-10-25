@@ -15,3 +15,4 @@ CREATE TABLE "product" (
 );
 
 CREATE INDEX "product_available_sortOrder_idx" ON "product"("available", "sortOrder");
+

@@ -12,3 +12,4 @@ export function createAuthRouter(authService: AuthService): Router {
 
     return router;
 }
+

@@ -161,3 +161,4 @@ export class BookingUseCase {
         return { date, environment, slots };
     }
 }
+

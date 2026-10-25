@@ -27,3 +27,4 @@ export class ConflictError extends AppError {
         super(409, code, message);
     }
 }
+

@@ -28,3 +28,4 @@ export interface IProductRepository {
     update(id: string, input: UpdateProductInput): Promise<Product>;
     delete(id: string): Promise<void>;
 }
+

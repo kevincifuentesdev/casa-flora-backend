@@ -23,3 +23,4 @@ export class DuplicateUsernameError extends ConflictError {
         super("USERNAME_TAKEN", "Ese nombre de usuario ya está en uso.");
     }
 }
+

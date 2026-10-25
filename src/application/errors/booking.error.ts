@@ -30,3 +30,4 @@ export class BookingAlreadyCancelledError extends ConflictError {
         super("BOOKING_ALREADY_CANCELLED", "Esta reserva ya fue cancelada.");
     }
 }
+

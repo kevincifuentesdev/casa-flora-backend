@@ -38,3 +38,4 @@ export interface IBookingRepository {
     ): Promise<Record<BookingTimeSlot, number>>;
     updateStatus(id: string, status: BookingStatus): Promise<Booking>;
 }
+

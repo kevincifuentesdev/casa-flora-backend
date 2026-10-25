@@ -46,3 +46,4 @@ seed().catch((error: unknown) => {
     console.error("Seed failed:", error);
     process.exit(1);
 });
+

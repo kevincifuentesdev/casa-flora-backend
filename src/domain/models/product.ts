@@ -241,3 +241,4 @@ export const INITIAL_PRODUCTS: readonly SeedProductItem[] = [
         sortOrder: 12,
     },
 ];
+

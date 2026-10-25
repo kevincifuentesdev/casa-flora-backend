@@ -122,3 +122,4 @@ export class ProductPgRepository implements IProductRepository {
         }
     }
 }
+

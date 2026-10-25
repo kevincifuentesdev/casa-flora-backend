@@ -40,3 +40,4 @@ export class ProductUseCase {
         return this.productRepository.delete(id);
     }
 }
+
