@@ -36,6 +36,16 @@ export class BookingController {
     readonly createBooking: RequestHandler = async (req: Request, res: Response, next) => {
         try {
             const user = getAuthenticatedUser(res);
+            if (user.role === "admin") {
+                res.status(403).json({
+                    error: {
+                        code: "FORBIDDEN",
+                        message:
+                            "Las cuentas de administrador no pueden crear reservas de comensales. Gestiona las reservas en el panel de administración.",
+                    },
+                });
+                return;
+            }
             const body = (res.locals.validatedBody ?? req.body) as CreateBookingDto;
             const booking = await this.bookingUseCase.createBooking({
                 userId: user.id,
