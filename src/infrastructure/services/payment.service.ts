@@ -69,6 +69,12 @@ const mercadoPagoPaymentSearchResponseSchema = z.object({
     results: z.array(mercadoPagoPaymentItemSchema).default([]),
 });
 
+interface FetchResponseLike {
+    ok: boolean;
+    status: number;
+    json(): Promise<unknown>;
+}
+
 function formatApprovedPaymentSummary(
     payment: z.infer<typeof mercadoPagoPaymentItemSchema>,
 ): string {
@@ -146,7 +152,7 @@ export class MercadoPagoGateway implements IPaymentGateway {
             };
         }
 
-        let response: Response;
+        let response: FetchResponseLike;
         try {
             response = await fetch(
                 "https://api.mercadopago.com/checkout/preferences",
@@ -194,7 +200,7 @@ export class MercadoPagoGateway implements IPaymentGateway {
 
         if (input.paymentId && /^\d+$/.test(input.paymentId.trim())) {
             try {
-                const directResponse = await fetch(
+                const directResponse: FetchResponseLike = await fetch(
                     `https://api.mercadopago.com/v1/payments/${encodeURIComponent(input.paymentId.trim())}`,
                     {
                         method: "GET",
@@ -222,7 +228,7 @@ export class MercadoPagoGateway implements IPaymentGateway {
         }
 
         if (candidates.length === 0) {
-            let searchResponse: Response;
+            let searchResponse: FetchResponseLike;
             try {
                 const searchUrl = `https://api.mercadopago.com/v1/payments/search?external_reference=${encodeURIComponent(input.externalReference)}&sort=date_created&criteria=desc&limit=5`;
                 searchResponse = await fetch(searchUrl, {
