@@ -1,6 +1,9 @@
 export const ORDER_STATUSES = ["delivered", "preparing", "cancelled"] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
+export const DELIVERY_METHODS = ["pickup", "delivery"] as const;
+export type DeliveryMethod = (typeof DELIVERY_METHODS)[number];
+
 export interface OrderItem {
     id: string;
     orderId: string;
@@ -25,4 +28,3 @@ export interface Order {
     createdAt: Date;
     updatedAt: Date;
 }
-

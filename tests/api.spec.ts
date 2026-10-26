@@ -66,6 +66,7 @@ import type {
 } from "../src/domain/repository/IUser.repository.js";
 import type { AuthService } from "../src/infrastructure/services/auth.service.js";
 import { parseEnv } from "../src/infrastructure/services/env.service.js";
+import type { IPaymentGateway } from "../src/infrastructure/services/payment.service.js";
 
 interface TestResponse<T = unknown> {
     status: number;
@@ -605,6 +606,13 @@ describe("Casa Flora Backend Clean Architecture & HTTP API", () => {
 
         const userRepository = new InMemoryUserRepository([customerUser, adminUser]);
         const orderRepository = new InMemoryOrderRepository(userRepository);
+        const paymentGateway: IPaymentGateway = {
+            createCheckoutPreference: async (input) => ({
+                preferenceId: `pref-${input.externalReference}`,
+                checkoutUrl: `https://www.mercadopago.com.co/checkout/v1/redirect?pref_id=pref-${input.externalReference}`,
+                sandboxCheckoutUrl: `https://sandbox.mercadopago.com.co/checkout/v1/redirect?pref_id=pref-${input.externalReference}`,
+            }),
+        };
 
         app = createApp({
             env,
@@ -613,6 +621,7 @@ describe("Casa Flora Backend Clean Architecture & HTTP API", () => {
             productRepository: new InMemoryProductRepository(),
             bookingRepository: new InMemoryBookingRepository(),
             orderRepository,
+            paymentGateway,
         });
     });
 
@@ -816,5 +825,76 @@ describe("Casa Flora Backend Clean Architecture & HTTP API", () => {
         );
         expect(cancelRes.status).toBe(200);
         expect(cancelRes.body.data.status).toBe("cancelled");
+    });
+
+    it("validates delivery address requirement and creates Mercado Pago checkout preferences for pickup and delivery", async () => {
+        const missingAddressRes = await requestApp<{
+            error: { code: string; details?: Record<string, string> };
+        }>(app, "/api/orders/checkout", {
+            method: "POST",
+            body: {
+                items: [{ productId: "abuela", quantity: 2 }],
+                deliveryMethod: "delivery",
+            },
+        });
+        expect(missingAddressRes.status).toBe(400);
+        expect(missingAddressRes.body.error.code).toBe("VALIDATION_ERROR");
+
+        const guestPickupRes = await requestApp<{
+            data: {
+                preferenceId: string;
+                checkoutUrl: string;
+                sandboxCheckoutUrl: string;
+                deliveryMethod: string;
+                addressLabel: string;
+                totalAmount: number;
+                pointsEarned: number;
+                order: unknown;
+            };
+        }>(app, "/api/orders/checkout", {
+            method: "POST",
+            body: {
+                items: [{ productId: "abuela", quantity: 1 }],
+                deliveryMethod: "pickup",
+            },
+        });
+        expect(guestPickupRes.status).toBe(201);
+        expect(guestPickupRes.body.data.deliveryMethod).toBe("pickup");
+        expect(guestPickupRes.body.data.addressLabel).toContain("Recoger en el lugar");
+        expect(guestPickupRes.body.data.checkoutUrl).toContain("mercadopago.com.co");
+        expect(guestPickupRes.body.data.order).toBeNull();
+
+        const authDeliveryRes = await requestApp<{
+            data: {
+                preferenceId: string;
+                checkoutUrl: string;
+                deliveryMethod: string;
+                addressLabel: string;
+                pointsEarned: number;
+                order: { id: string; addressLabel: string; paymentSummary: string } | null;
+            };
+        }>(app, "/api/orders/checkout", {
+            method: "POST",
+            headers: { Authorization: "Bearer token-customer" },
+            body: {
+                items: [{ productId: "abuela", quantity: 2 }],
+                deliveryMethod: "delivery",
+                deliveryAddress: {
+                    label: "Oficina",
+                    addressLine: "Carrera 43A # 14-50",
+                    neighborhood: "El Poblado",
+                    city: "Medellín, Antioquia",
+                    details: "Piso 4",
+                    saveToProfile: true,
+                },
+            },
+        });
+        expect(authDeliveryRes.status).toBe(201);
+        expect(authDeliveryRes.body.data.deliveryMethod).toBe("delivery");
+        expect(authDeliveryRes.body.data.addressLabel).toContain("Carrera 43A # 14-50");
+        expect(authDeliveryRes.body.data.order).not.toBeNull();
+        expect(authDeliveryRes.body.data.order?.paymentSummary).toBe(
+            "Mercado Pago Checkout Pro",
+        );
     });
 });

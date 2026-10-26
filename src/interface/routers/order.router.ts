@@ -1,6 +1,9 @@
 import { Router, type RequestHandler } from "express";
 
-import { createOrderDtoSchema } from "../../infrastructure/dtos/order.dto.js";
+import {
+    createCheckoutDtoSchema,
+    createOrderDtoSchema,
+} from "../../infrastructure/dtos/order.dto.js";
 import type { OrderController } from "../controllers/order.controller.js";
 import type { AuthMiddleware } from "../middlewares/auth.middleware.js";
 import { validateBody } from "../middlewares/validate.middleware.js";
@@ -14,6 +17,13 @@ export function createOrderRouter(
 
     router.get("/me", authMiddleware.requireAuth, orderController.listMine);
     router.post(
+        "/checkout",
+        writeRateLimiter,
+        authMiddleware.optionalAuth,
+        validateBody(createCheckoutDtoSchema),
+        orderController.checkout,
+    );
+    router.post(
         "/",
         writeRateLimiter,
         authMiddleware.requireAuth,
@@ -23,4 +33,3 @@ export function createOrderRouter(
 
     return router;
 }
-

@@ -2,10 +2,15 @@ import type { Request, RequestHandler, Response } from "express";
 
 import type { OrderUseCase } from "../../application/order.use-case.js";
 import {
+    type CheckoutSessionResponseDto,
+    type CreateCheckoutDto,
     type CreateOrderDto,
     toOrderResponseDto,
 } from "../../infrastructure/dtos/order.dto.js";
-import { getAuthenticatedUser } from "../middlewares/auth.middleware.js";
+import {
+    getAuthenticatedUser,
+    getOptionalAuthenticatedUser,
+} from "../middlewares/auth.middleware.js";
 
 export class OrderController {
     constructor(private readonly orderUseCase: OrderUseCase) {}
@@ -21,6 +26,30 @@ export class OrderController {
         }
     };
 
+    readonly checkout: RequestHandler = async (req: Request, res: Response, next) => {
+        try {
+            const current = getOptionalAuthenticatedUser(res);
+            const body = (res.locals.validatedBody ?? req.body) as CreateCheckoutDto;
+            const session = await this.orderUseCase.createCheckout(
+                current ? current.id : null,
+                body,
+            );
+            const dto: CheckoutSessionResponseDto = {
+                preferenceId: session.preferenceId,
+                checkoutUrl: session.checkoutUrl,
+                sandboxCheckoutUrl: session.sandboxCheckoutUrl,
+                deliveryMethod: session.deliveryMethod,
+                addressLabel: session.addressLabel,
+                totalAmount: session.totalAmount,
+                pointsEarned: session.pointsEarned,
+                order: session.order ? toOrderResponseDto(session.order) : null,
+            };
+            res.status(201).json({ data: dto });
+        } catch (error) {
+            next(error);
+        }
+    };
+
     readonly listMine: RequestHandler = async (_req: Request, res: Response, next) => {
         try {
             const current = getAuthenticatedUser(res);
@@ -31,4 +60,3 @@ export class OrderController {
         }
     };
 }
-

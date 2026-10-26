@@ -18,3 +18,18 @@ export class EmptyOrderItemsError extends AppError {
     }
 }
 
+export class DeliveryAddressRequiredError extends AppError {
+    constructor() {
+        super(
+            400,
+            "DELIVERY_ADDRESS_REQUIRED",
+            "Debes seleccionar o ingresar una dirección de entrega para el envío a domicilio.",
+        );
+    }
+}
+
+export class PaymentGatewayError extends AppError {
+    constructor(message: string) {
+        super(502, "PAYMENT_GATEWAY_ERROR", message);
+    }
+}

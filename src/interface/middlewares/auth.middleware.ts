@@ -20,6 +20,10 @@ export function getAuthenticatedUser(res: Response): User {
     return user;
 }
 
+export function getOptionalAuthenticatedUser(res: Response): User | null {
+    return (res.locals as AuthenticatedLocals).user ?? null;
+}
+
 export class AuthMiddleware {
     constructor(
         private readonly authService: AuthService,
@@ -45,6 +49,21 @@ export class AuthMiddleware {
         }
     };
 
+    readonly optionalAuth: RequestHandler = async (req: Request, res: Response, next) => {
+        try {
+            const userId = await this.authService.resolveUserId(req.headers);
+            if (userId) {
+                const user = await this.userRepository.findById(userId);
+                if (user) {
+                    (res.locals as AuthenticatedLocals).user = user;
+                }
+            }
+            next();
+        } catch {
+            next();
+        }
+    };
+
     readonly requireAdmin: RequestHandler = async (req: Request, res: Response, next) => {
         await this.requireAuth(req, res, (err?: unknown) => {
             if (err) {
@@ -62,4 +81,3 @@ export class AuthMiddleware {
         });
     };
 }
-

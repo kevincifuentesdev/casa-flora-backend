@@ -11,6 +11,10 @@ import type { IUserRepository } from "./domain/repository/IUser.repository.js";
 import { AUTH_BASE_PATH, type AuthService } from "./infrastructure/services/auth.service.js";
 import type { Env } from "./infrastructure/services/env.service.js";
 import { LoggerService } from "./infrastructure/services/logger.service.js";
+import {
+    type IPaymentGateway,
+    MercadoPagoGateway,
+} from "./infrastructure/services/payment.service.js";
 import { BookingController } from "./interface/controllers/booking.controller.js";
 import { OrderController } from "./interface/controllers/order.controller.js";
 import { ProductController } from "./interface/controllers/product.controller.js";
@@ -31,6 +35,7 @@ export interface AppDependencies {
     productRepository: IProductRepository;
     bookingRepository: IBookingRepository;
     orderRepository?: IOrderRepository;
+    paymentGateway?: IPaymentGateway;
     logger?: LoggerService;
 }
 
@@ -65,8 +70,14 @@ export function createApp(deps: AppDependencies): Express {
         interior: deps.env.INTERIOR_CAPACITY,
         patio: deps.env.PATIO_CAPACITY,
     });
+    const paymentGateway = deps.paymentGateway ?? new MercadoPagoGateway(deps.env);
     const orderUseCase = deps.orderRepository
-        ? new OrderUseCase(deps.orderRepository, deps.productRepository, deps.userRepository)
+        ? new OrderUseCase(
+              deps.orderRepository,
+              deps.productRepository,
+              deps.userRepository,
+              paymentGateway,
+          )
         : undefined;
 
     const userController = new UserController(userUseCase);
