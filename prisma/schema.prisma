@@ -21,14 +21,22 @@ model User {
   username        String? @unique
   displayUsername String?
 
-  firstName String
-  lastName  String
-  birthDate String @db.VarChar(10)
-  role      String @default("customer")
+  firstName           String
+  lastName            String
+  birthDate           String  @db.VarChar(10)
+  role                String  @default("customer")
+  points              Int     @default(0)
+  onboardingCompleted Boolean @default(false)
+  dietPreference      String? @db.VarChar(24)
+  spiceTolerance      String? @db.VarChar(24)
+  favoriteMoment      String? @db.VarChar(24)
 
-  sessions Session[]
-  accounts Account[]
-  bookings Booking[]
+  sessions       Session[]
+  accounts       Account[]
+  bookings       Booking[]
+  addresses      UserAddress[]
+  paymentMethods PaymentMethod[]
+  orders         Order[]
 
   @@map("user")
 }
@@ -123,4 +131,70 @@ model Booking {
   @@index([userId, date])
   @@index([date, time, environment, status])
   @@map("booking")
+}
+
+model UserAddress {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label        String   @db.VarChar(40)
+  addressLine  String   @db.VarChar(160)
+  neighborhood String   @db.VarChar(80)
+  city         String   @default("Medellín, Antioquia") @db.VarChar(80)
+  details      String?  @db.VarChar(160)
+  isDefault    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId])
+  @@map("user_address")
+}
+
+model PaymentMethod {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       String   @db.VarChar(24)
+  brand      String   @db.VarChar(40)
+  lastFour   String?  @db.VarChar(4)
+  holderName String?  @db.VarChar(80)
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId])
+  @@map("payment_method")
+}
+
+model Order {
+  id             String      @id @default(cuid())
+  orderNumber    Int         @default(autoincrement())
+  userId         String
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  addressLabel   String      @db.VarChar(120)
+  paymentSummary String      @db.VarChar(80)
+  totalAmount    Int
+  pointsEarned   Int
+  status         String      @default("delivered") @db.VarChar(24)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  items          OrderItem[]
+
+  @@index([userId, createdAt])
+  @@map("customer_order")
+}
+
+model OrderItem {
+  id                 String @id @default(cuid())
+  orderId            String
+  order              Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId          String
+  productName        String
+  productDescription String
+  productImageUrl    String
+  unitPrice          Int
+  quantity           Int
+
+  @@index([orderId])
+  @@map("customer_order_item")
 }

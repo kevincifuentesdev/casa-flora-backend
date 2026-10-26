@@ -1,5 +1,64 @@
+import type { Product } from "./product.js";
+
 export const USER_ROLES = ["customer", "admin"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
+
+export const DIET_PREFERENCES = ["cows", "trees", "both"] as const;
+export type DietPreference = (typeof DIET_PREFERENCES)[number];
+
+export const SPICE_TOLERANCES = ["none", "mild", "spicy"] as const;
+export type SpiceTolerance = (typeof SPICE_TOLERANCES)[number];
+
+export const FAVORITE_MOMENTS = ["almuerzo", "tarde", "postre"] as const;
+export type FavoriteMoment = (typeof FAVORITE_MOMENTS)[number];
+
+export const PAYMENT_METHOD_TYPES = ["card", "pse", "cash"] as const;
+export type PaymentMethodType = (typeof PAYMENT_METHOD_TYPES)[number];
+
+export const REWARD_GOAL_POINTS = 15;
+export const PESOS_PER_POINT = 2500;
+export const MIN_POINTS_PER_ORDER = 3;
+
+export interface UserPreferences {
+    dietPreference: DietPreference | null;
+    spiceTolerance: SpiceTolerance | null;
+    favoriteMoment: FavoriteMoment | null;
+}
+
+export interface UserAddress {
+    id: string;
+    userId: string;
+    label: string;
+    addressLine: string;
+    neighborhood: string;
+    city: string;
+    details: string | null;
+    isDefault: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+export interface PaymentMethod {
+    id: string;
+    userId: string;
+    type: PaymentMethodType;
+    brand: string;
+    lastFour: string | null;
+    holderName: string | null;
+    isDefault: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+export interface LoyaltySummary {
+    points: number;
+    nextRewardGoal: number;
+    pointsInCurrentCycle: number;
+    pointsRemaining: number;
+    progressPercent: number;
+    rewardName: string;
+    availableRewards: number;
+}
 
 export interface User {
     id: string;
@@ -11,6 +70,13 @@ export interface User {
     email: string;
     emailVerified: boolean;
     role: UserRole;
+    points: number;
+    onboardingCompleted: boolean;
+    dietPreference: DietPreference | null;
+    spiceTolerance: SpiceTolerance | null;
+    favoriteMoment: FavoriteMoment | null;
+    addresses: UserAddress[];
+    paymentMethods: PaymentMethod[];
     createdAt: Date;
     updatedAt: Date;
 }
@@ -71,4 +137,74 @@ export function validateBirthDate(value: string, today: Date = new Date()): stri
     }
 
     return null;
+}
+
+export function calculateOrderPoints(totalAmount: number): number {
+    if (totalAmount <= 0) return 0;
+    return Math.max(MIN_POINTS_PER_ORDER, Math.floor(totalAmount / PESOS_PER_POINT));
+}
+
+export function buildLoyaltySummary(
+    points: number,
+    dietPreference: DietPreference | null,
+): LoyaltySummary {
+    const safePoints = Math.max(0, Math.floor(points));
+    const availableRewards = Math.floor(safePoints / REWARD_GOAL_POINTS);
+    const pointsInCurrentCycle = safePoints % REWARD_GOAL_POINTS;
+    const pointsRemaining = REWARD_GOAL_POINTS - pointsInCurrentCycle;
+    const progressPercent = Math.min(
+        100,
+        Math.round((pointsInCurrentCycle / REWARD_GOAL_POINTS) * 100),
+    );
+
+    const rewardName =
+        dietPreference === "trees" ? "Rolls de Yuca Silvestre" : "Empanadas de la Abuela";
+
+    return {
+        points: safePoints,
+        nextRewardGoal: REWARD_GOAL_POINTS,
+        pointsInCurrentCycle,
+        pointsRemaining,
+        progressPercent,
+        rewardName,
+        availableRewards,
+    };
+}
+
+export function recommendProductForUser(
+    products: readonly Product[],
+    preferences: UserPreferences,
+): Product | null {
+    const available = products.filter((item) => item.available);
+    if (available.length === 0) return null;
+
+    if (preferences.favoriteMoment === "postre") {
+        if (preferences.dietPreference === "trees") {
+            const veganDessert = available.find(
+                (item) => item.categories.includes("Postre") && item.categories.includes("Vegano"),
+            );
+            if (veganDessert) return veganDessert;
+        }
+        const dessert = available.find((item) => item.categories.includes("Postre"));
+        if (dessert) return dessert;
+    }
+
+    if (preferences.dietPreference === "trees") {
+        const vegan = available.find((item) => item.categories.includes("Vegano"));
+        if (vegan) return vegan;
+    }
+
+    if (preferences.favoriteMoment === "tarde") {
+        const starter = available.find((item) => item.categories.includes("Entrada"));
+        if (starter) return starter;
+    }
+
+    if (preferences.dietPreference === "cows") {
+        const hearty = available.find(
+            (item) => item.id === "abuela" || item.categories.includes("Plato Fuerte"),
+        );
+        if (hearty) return hearty;
+    }
+
+    return available.find((item) => item.id === "fernando") ?? available[0] ?? null;
 }
