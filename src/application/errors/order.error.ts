@@ -17,3 +17,4 @@ export class EmptyOrderItemsError extends AppError {
         super(400, "EMPTY_ORDER_ITEMS", "El pedido debe incluir al menos un producto.");
     }
 }
+

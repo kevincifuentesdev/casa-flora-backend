@@ -22,3 +22,4 @@ export interface IOrderRepository {
     createAndAwardPoints(input: CreateOrderRecordInput): Promise<Order>;
     findByUserId(userId: string): Promise<Order[]>;
 }
+

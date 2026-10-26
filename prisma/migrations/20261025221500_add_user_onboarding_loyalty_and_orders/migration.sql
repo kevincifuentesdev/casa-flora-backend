@@ -77,3 +77,4 @@ ALTER TABLE "payment_method" ADD CONSTRAINT "payment_method_userId_fkey" FOREIGN
 ALTER TABLE "customer_order" ADD CONSTRAINT "customer_order_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 ALTER TABLE "customer_order_item" ADD CONSTRAINT "customer_order_item_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "customer_order"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
