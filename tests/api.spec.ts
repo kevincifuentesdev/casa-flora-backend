@@ -14,6 +14,10 @@ import {
     DuplicateBookingSlotError,
 } from "../src/application/errors/booking.error.js";
 import {
+    AddressNotFoundError,
+    PaymentMethodNotFoundError,
+} from "../src/application/errors/order.error.js";
+import {
     DuplicateProductError,
     ProductNotFoundError,
 } from "../src/application/errors/product.error.js";
@@ -25,6 +29,7 @@ import {
     type EnvironmentId,
     formatBogotaDate,
 } from "../src/domain/models/booking.js";
+import type { Order } from "../src/domain/models/order.js";
 import {
     INITIAL_PRODUCTS,
     type Product,
@@ -32,7 +37,9 @@ import {
     filterAndSortProducts,
 } from "../src/domain/models/product.js";
 import {
+    type PaymentMethod,
     type User,
+    type UserAddress,
     validateBirthDate,
     validatePersonName,
 } from "../src/domain/models/user.js";
@@ -42,11 +49,18 @@ import type {
     ReserveBookingAtomicInput,
 } from "../src/domain/repository/IBooking.repository.js";
 import type {
+    CreateOrderRecordInput,
+    IOrderRepository,
+} from "../src/domain/repository/IOrder.repository.js";
+import type {
     CreateProductInput,
     IProductRepository,
     UpdateProductInput,
 } from "../src/domain/repository/IProduct.repository.js";
 import type {
+    CompleteOnboardingInput,
+    CreatePaymentMethodInput,
+    CreateUserAddressInput,
     IUserRepository,
     UpdateUserProfileInput,
 } from "../src/domain/repository/IUser.repository.js";
@@ -133,6 +147,7 @@ async function requestApp<T = unknown>(
 
 class InMemoryUserRepository implements IUserRepository {
     private readonly users = new Map<string, User>();
+    private seq = 1;
 
     constructor(initial: User[]) {
         for (const user of initial) {
@@ -180,10 +195,159 @@ class InMemoryUserRepository implements IUserRepository {
             name: `${firstName} ${lastName}`,
             birthDate: input.birthDate ?? current.birthDate,
             username: input.username ?? current.username,
+            onboardingCompleted: input.onboardingCompleted ?? current.onboardingCompleted,
+            dietPreference:
+                input.dietPreference !== undefined ? input.dietPreference : current.dietPreference,
+            spiceTolerance:
+                input.spiceTolerance !== undefined ? input.spiceTolerance : current.spiceTolerance,
+            favoriteMoment:
+                input.favoriteMoment !== undefined ? input.favoriteMoment : current.favoriteMoment,
             updatedAt: new Date(),
         };
         this.users.set(id, updated);
         return updated;
+    }
+
+    async addAddress(userId: string, input: CreateUserAddressInput): Promise<UserAddress> {
+        const current = this.users.get(userId);
+        if (!current) throw new UserNotFoundError();
+
+        const now = new Date();
+        const isDefault = input.isDefault ?? current.addresses.length === 0;
+        const address: UserAddress = {
+            id: `addr-${this.seq++}`,
+            userId,
+            label: input.label,
+            addressLine: input.addressLine,
+            neighborhood: input.neighborhood,
+            city: input.city ?? "Medellín, Antioquia",
+            details: input.details ?? null,
+            isDefault,
+            createdAt: now,
+            updatedAt: now,
+        };
+        const nextAddresses = isDefault
+            ? [address, ...current.addresses.map((a) => ({ ...a, isDefault: false }))]
+            : [...current.addresses, address];
+
+        this.users.set(userId, { ...current, addresses: nextAddresses, updatedAt: now });
+        return address;
+    }
+
+    async removeAddress(userId: string, addressId: string): Promise<void> {
+        const current = this.users.get(userId);
+        if (!current) throw new UserNotFoundError();
+        if (!current.addresses.some((a) => a.id === addressId)) {
+            throw new AddressNotFoundError();
+        }
+        this.users.set(userId, {
+            ...current,
+            addresses: current.addresses.filter((a) => a.id !== addressId),
+            updatedAt: new Date(),
+        });
+    }
+
+    async addPaymentMethod(
+        userId: string,
+        input: CreatePaymentMethodInput,
+    ): Promise<PaymentMethod> {
+        const current = this.users.get(userId);
+        if (!current) throw new UserNotFoundError();
+
+        const now = new Date();
+        const isDefault = input.isDefault ?? current.paymentMethods.length === 0;
+        const method: PaymentMethod = {
+            id: `pm-${this.seq++}`,
+            userId,
+            type: input.type,
+            brand: input.brand,
+            lastFour: input.lastFour ?? null,
+            holderName: input.holderName ?? null,
+            isDefault,
+            createdAt: now,
+            updatedAt: now,
+        };
+        const nextMethods = isDefault
+            ? [method, ...current.paymentMethods.map((m) => ({ ...m, isDefault: false }))]
+            : [...current.paymentMethods, method];
+
+        this.users.set(userId, { ...current, paymentMethods: nextMethods, updatedAt: now });
+        return method;
+    }
+
+    async removePaymentMethod(userId: string, paymentMethodId: string): Promise<void> {
+        const current = this.users.get(userId);
+        if (!current) throw new UserNotFoundError();
+        if (!current.paymentMethods.some((m) => m.id === paymentMethodId)) {
+            throw new PaymentMethodNotFoundError();
+        }
+        this.users.set(userId, {
+            ...current,
+            paymentMethods: current.paymentMethods.filter((m) => m.id !== paymentMethodId),
+            updatedAt: new Date(),
+        });
+    }
+
+    async saveOnboarding(userId: string, input: CompleteOnboardingInput): Promise<User> {
+        if (input.address) {
+            await this.addAddress(userId, input.address);
+        }
+        if (input.paymentMethod) {
+            await this.addPaymentMethod(userId, input.paymentMethod);
+        }
+        return this.updateProfile(userId, {
+            onboardingCompleted: true,
+            ...(input.dietPreference !== undefined ? { dietPreference: input.dietPreference } : {}),
+            ...(input.spiceTolerance !== undefined ? { spiceTolerance: input.spiceTolerance } : {}),
+            ...(input.favoriteMoment !== undefined ? { favoriteMoment: input.favoriteMoment } : {}),
+        });
+    }
+
+    incrementPoints(userId: string, pointsToAdd: number): void {
+        const current = this.users.get(userId);
+        if (!current) return;
+        this.users.set(userId, {
+            ...current,
+            points: current.points + pointsToAdd,
+            updatedAt: new Date(),
+        });
+    }
+}
+
+class InMemoryOrderRepository implements IOrderRepository {
+    private readonly orders = new Map<string, Order>();
+    private seq = 2080;
+
+    constructor(private readonly userRepository: InMemoryUserRepository) {}
+
+    async createAndAwardPoints(input: CreateOrderRecordInput): Promise<Order> {
+        const now = new Date();
+        const orderNumber = ++this.seq;
+        const orderId = `order-${orderNumber}`;
+        const order: Order = {
+            id: orderId,
+            orderNumber,
+            userId: input.userId,
+            addressLabel: input.addressLabel,
+            paymentSummary: input.paymentSummary,
+            totalAmount: input.totalAmount,
+            pointsEarned: input.pointsEarned,
+            status: "delivered",
+            items: input.items.map((item, idx) => ({
+                id: `${orderId}-item-${idx + 1}`,
+                orderId,
+                ...item,
+            })),
+            createdAt: now,
+            updatedAt: now,
+        };
+        this.orders.set(order.id, order);
+        this.userRepository.incrementPoints(input.userId, input.pointsEarned);
+        return order;
+    }
+
+    async findByUserId(userId: string): Promise<Order[]> {
+        return Array.from(this.orders.values()).filter((o) => o.userId === userId);
     }
 }
 
@@ -380,6 +544,13 @@ describe("Casa Flora Backend Clean Architecture & HTTP API", () => {
         email: "valentina@casaflora.co",
         emailVerified: true,
         role: "customer",
+        points: 0,
+        onboardingCompleted: false,
+        dietPreference: null,
+        spiceTolerance: null,
+        favoriteMoment: null,
+        addresses: [],
+        paymentMethods: [],
         createdAt: new Date("2026-10-20T12:00:00.000Z"),
         updatedAt: new Date("2026-10-20T12:00:00.000Z"),
     };
@@ -394,6 +565,13 @@ describe("Casa Flora Backend Clean Architecture & HTTP API", () => {
         email: "kevin@casaflora.co",
         emailVerified: true,
         role: "admin",
+        points: 12,
+        onboardingCompleted: true,
+        dietPreference: "cows",
+        spiceTolerance: "mild",
+        favoriteMoment: "almuerzo",
+        addresses: [],
+        paymentMethods: [],
         createdAt: new Date("2026-10-20T12:00:00.000Z"),
         updatedAt: new Date("2026-10-20T12:00:00.000Z"),
     };
@@ -425,12 +603,16 @@ describe("Casa Flora Backend Clean Architecture & HTTP API", () => {
             },
         } as unknown as AuthService;
 
+        const userRepository = new InMemoryUserRepository([customerUser, adminUser]);
+        const orderRepository = new InMemoryOrderRepository(userRepository);
+
         app = createApp({
             env,
             authService: fakeAuthService,
-            userRepository: new InMemoryUserRepository([customerUser, adminUser]),
+            userRepository,
             productRepository: new InMemoryProductRepository(),
             bookingRepository: new InMemoryBookingRepository(),
+            orderRepository,
         });
     });
 
@@ -517,6 +699,62 @@ describe("Casa Flora Backend Clean Architecture & HTTP API", () => {
         expect(patchRes.body.data.name).toBe("Valentina Sofía Restrepo");
     });
 
+    it("saves onboarding data, recommends meals from questionnaire and awards loyalty points on orders", async () => {
+        const onboardingRes = await requestApp<{
+            data: {
+                onboardingCompleted: boolean;
+                addresses: Array<{ label: string }>;
+                paymentMethods: Array<{ brand: string; lastFour: string }>;
+                recommendedProduct: { id: string; categories: string[] };
+            };
+        }>(app, "/api/users/me/onboarding", {
+            method: "POST",
+            headers: { Authorization: "Bearer token-customer" },
+            body: {
+                address: {
+                    label: "Casa",
+                    addressLine: "Calle 10 # 43A-30",
+                    neighborhood: "El Poblado",
+                },
+                paymentMethod: {
+                    type: "card",
+                    brand: "Visa",
+                    lastFour: "4912",
+                },
+                dietPreference: "trees",
+                spiceTolerance: "mild",
+                favoriteMoment: "almuerzo",
+            },
+        });
+        expect(onboardingRes.status).toBe(200);
+        expect(onboardingRes.body.data.onboardingCompleted).toBe(true);
+        expect(onboardingRes.body.data.addresses[0]?.label).toBe("Casa");
+        expect(onboardingRes.body.data.paymentMethods[0]?.lastFour).toBe("4912");
+        expect(onboardingRes.body.data.recommendedProduct.categories).toContain("Vegano");
+
+        const orderRes = await requestApp<{
+            data: { totalAmount: number; pointsEarned: number; orderNumber: number };
+        }>(app, "/api/orders", {
+            method: "POST",
+            headers: { Authorization: "Bearer token-customer" },
+            body: {
+                items: [{ productId: "abuela", quantity: 2 }],
+            },
+        });
+        expect(orderRes.status).toBe(201);
+        expect(orderRes.body.data.totalAmount).toBe(36000);
+        expect(orderRes.body.data.pointsEarned).toBeGreaterThan(0);
+
+        const meAfterOrder = await requestApp<{
+            data: { points: number; orders: Array<{ id: string }> };
+        }>(app, "/api/users/me", {
+            headers: { Authorization: "Bearer token-customer" },
+        });
+        expect(meAfterOrder.status).toBe(200);
+        expect(meAfterOrder.body.data.points).toBe(orderRes.body.data.pointsEarned);
+        expect(meAfterOrder.body.data.orders.length).toBe(1);
+    });
+
     it("creates bookings, enforces slot capacity and supports cancellation", async () => {
         const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
         const dateIso = formatBogotaDate(tomorrow);
@@ -580,4 +818,3 @@ describe("Casa Flora Backend Clean Architecture & HTTP API", () => {
         expect(cancelRes.body.data.status).toBe("cancelled");
     });
 });
-

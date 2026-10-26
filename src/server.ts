@@ -1,6 +1,7 @@
 import { createApp } from "./app.js";
 import { BookingPgRepository } from "./infrastructure/repository/booking.pg.repository.js";
 import { createPrismaClient } from "./infrastructure/repository/client.js";
+import { OrderPgRepository } from "./infrastructure/repository/order.pg.repository.js";
 import { ProductPgRepository } from "./infrastructure/repository/product.pg.repository.js";
 import { UserPgRepository } from "./infrastructure/repository/user.pg.repository.js";
 import { AuthService, createAuth } from "./infrastructure/services/auth.service.js";
@@ -18,6 +19,7 @@ async function bootstrap(): Promise<void> {
     const userRepository = new UserPgRepository(prisma);
     const productRepository = new ProductPgRepository(prisma);
     const bookingRepository = new BookingPgRepository(prisma);
+    const orderRepository = new OrderPgRepository(prisma);
 
     const app = createApp({
         env,
@@ -25,6 +27,7 @@ async function bootstrap(): Promise<void> {
         userRepository,
         productRepository,
         bookingRepository,
+        orderRepository,
         logger,
     });
 
@@ -53,4 +56,3 @@ bootstrap().catch((error: unknown) => {
     });
     process.exit(1);
 });
-
