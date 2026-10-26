@@ -2,10 +2,13 @@ import { z } from "zod";
 
 import {
     DELIVERY_METHODS,
+    ORDER_STATUSES,
     type DeliveryMethod,
     type Order,
+    type OrderCustomerSummary,
     type OrderItem,
     type OrderStatus,
+    type PaymentVerificationStatus,
 } from "../../domain/models/order.js";
 import { PRODUCT_ID_PATTERN } from "../../domain/models/product.js";
 
@@ -80,8 +83,43 @@ export const createCheckoutDtoSchema = z
         }
     });
 
+export const verifyCheckoutPaymentDtoSchema = z.object({
+    externalReference: z
+        .string()
+        .trim()
+        .min(1, "La referencia del pedido es obligatoria.")
+        .max(120),
+    paymentId: z.string().trim().max(64).optional(),
+});
+
+export const adminOrderQueryDtoSchema = z.object({
+    status: z.enum(ORDER_STATUSES).optional(),
+    search: z.string().trim().max(120).optional(),
+});
+
+export const orderIdParamDtoSchema = z.object({
+    id: z.string().trim().min(1).max(64),
+});
+
+export const updateOrderStatusDtoSchema = z.object({
+    status: z.enum(ORDER_STATUSES),
+});
+
 export type CreateOrderDto = z.infer<typeof createOrderDtoSchema>;
 export type CreateCheckoutDto = z.infer<typeof createCheckoutDtoSchema>;
+export type VerifyCheckoutPaymentDto = z.infer<
+    typeof verifyCheckoutPaymentDtoSchema
+>;
+export type AdminOrderQueryDto = z.infer<typeof adminOrderQueryDtoSchema>;
+export type UpdateOrderStatusDto = z.infer<typeof updateOrderStatusDtoSchema>;
+
+export interface OrderCustomerSummaryDto {
+    id: string;
+    name: string;
+    email: string;
+    username: string | null;
+    points: number;
+}
 
 export interface OrderItemResponseDto {
     id: string;
@@ -103,18 +141,28 @@ export interface OrderResponseDto {
     pointsEarned: number;
     status: OrderStatus;
     items: OrderItemResponseDto[];
+    customer?: OrderCustomerSummaryDto;
     createdAt: string;
     updatedAt: string;
 }
 
 export interface CheckoutSessionResponseDto {
     preferenceId: string;
+    externalReference: string;
     checkoutUrl: string;
     sandboxCheckoutUrl: string;
     deliveryMethod: DeliveryMethod;
     addressLabel: string;
     totalAmount: number;
     pointsEarned: number;
+    order: OrderResponseDto | null;
+}
+
+export interface VerifyCheckoutPaymentResponseDto {
+    externalReference: string;
+    status: PaymentVerificationStatus;
+    paymentId: string | null;
+    paymentSummary: string;
     order: OrderResponseDto | null;
 }
 
@@ -130,6 +178,18 @@ function toOrderItemResponseDto(item: OrderItem): OrderItemResponseDto {
     };
 }
 
+function toOrderCustomerSummaryDto(
+    customer: OrderCustomerSummary,
+): OrderCustomerSummaryDto {
+    return {
+        id: customer.id,
+        name: customer.name,
+        email: customer.email,
+        username: customer.username,
+        points: customer.points,
+    };
+}
+
 export function toOrderResponseDto(order: Order): OrderResponseDto {
     return {
         id: order.id,
@@ -141,6 +201,9 @@ export function toOrderResponseDto(order: Order): OrderResponseDto {
         pointsEarned: order.pointsEarned,
         status: order.status,
         items: order.items.map(toOrderItemResponseDto),
+        ...(order.customer
+            ? { customer: toOrderCustomerSummaryDto(order.customer) }
+            : {}),
         createdAt: order.createdAt.toISOString(),
         updatedAt: order.updatedAt.toISOString(),
     };

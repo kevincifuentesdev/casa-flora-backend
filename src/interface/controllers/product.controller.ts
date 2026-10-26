@@ -39,6 +39,40 @@ export class ProductController {
         }
     };
 
+    readonly listAdminProducts: RequestHandler = async (
+        _req: Request,
+        res: Response,
+        next,
+    ) => {
+        try {
+            const query = (res.locals.validatedQuery ?? {}) as ProductQueryDto;
+            const products = await this.productUseCase.listProducts({
+                search: query.search,
+                categories: query.categories,
+                maxPrice: query.maxPrice,
+                sort: query.sort,
+                onlyAvailable: false,
+            });
+
+            const items = products.map(toProductResponseDto);
+            const maxPrice = items.reduce(
+                (max, item) => Math.max(max, item.price),
+                0,
+            );
+
+            res.status(200).json({
+                data: items,
+                meta: {
+                    total: items.length,
+                    categories: PRODUCT_CATEGORIES,
+                    maxPrice,
+                },
+            });
+        } catch (error) {
+            next(error);
+        }
+    };
+
     readonly getProductById: RequestHandler = async (req: Request, res: Response, next) => {
         try {
             const { id } = (res.locals.validatedParams ?? req.params) as { id: string };

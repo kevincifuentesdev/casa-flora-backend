@@ -33,3 +33,9 @@ export class PaymentGatewayError extends AppError {
         super(502, "PAYMENT_GATEWAY_ERROR", message);
     }
 }
+
+export class OrderNotFoundError extends NotFoundError {
+    constructor() {
+        super("ORDER_NOT_FOUND", "No se encontró el pedido solicitado.");
+    }
+}

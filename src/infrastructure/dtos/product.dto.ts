@@ -75,6 +75,10 @@ export interface ProductResponseDto {
     categories: ProductCategory[];
     description: string;
     imageUrl: string;
+    available: boolean;
+    sortOrder: number;
+    createdAt: string;
+    updatedAt: string;
 }
 
 export function toProductResponseDto(product: Product): ProductResponseDto {
@@ -85,6 +89,10 @@ export function toProductResponseDto(product: Product): ProductResponseDto {
         categories: product.categories,
         description: product.description,
         imageUrl: product.imageUrl,
+        available: product.available,
+        sortOrder: product.sortOrder,
+        createdAt: product.createdAt.toISOString(),
+        updatedAt: product.updatedAt.toISOString(),
     };
 }
 
