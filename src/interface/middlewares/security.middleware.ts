@@ -19,10 +19,16 @@ const noopMiddleware: RequestHandler = (_req, _res, next) => {
     next();
 };
 
+const helmetRunner = (
+    typeof helmet === "function"
+        ? helmet
+        : ((helmet as unknown as { default?: (options?: unknown) => RequestHandler }).default ?? helmet)
+) as (options?: unknown) => RequestHandler;
+
 export function createSecurityMiddlewares(env: Env): SecurityMiddlewares {
     const allowedOrigins = new Set(env.CORS_ORIGINS);
 
-    const helmetMiddleware = helmet({
+    const helmetMiddleware = helmetRunner({
         contentSecurityPolicy: {
             useDefaults: false,
             directives: {
