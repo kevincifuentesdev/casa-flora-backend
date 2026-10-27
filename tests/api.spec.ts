@@ -1043,6 +1043,7 @@ describe("Casa Flora Backend Clean Architecture & HTTP API", () => {
             error: { code: string; details?: Record<string, string> };
         }>(app, "/api/orders/checkout", {
             method: "POST",
+            headers: { Authorization: "Bearer token-customer" },
             body: {
                 items: [{ productId: "abuela", quantity: 2 }],
                 deliveryMethod: "delivery",
@@ -1051,7 +1052,18 @@ describe("Casa Flora Backend Clean Architecture & HTTP API", () => {
         expect(missingAddressRes.status).toBe(400);
         expect(missingAddressRes.body.error.code).toBe("VALIDATION_ERROR");
 
-        const guestPickupRes = await requestApp<{
+        const unauthenticatedRes = await requestApp<{
+            error: { code: string };
+        }>(app, "/api/orders/checkout", {
+            method: "POST",
+            body: {
+                items: [{ productId: "abuela", quantity: 1 }],
+                deliveryMethod: "pickup",
+            },
+        });
+        expect(unauthenticatedRes.status).toBe(401);
+
+        const customerPickupRes = await requestApp<{
             data: {
                 preferenceId: string;
                 checkoutUrl: string;
@@ -1064,16 +1076,16 @@ describe("Casa Flora Backend Clean Architecture & HTTP API", () => {
             };
         }>(app, "/api/orders/checkout", {
             method: "POST",
+            headers: { Authorization: "Bearer token-customer" },
             body: {
                 items: [{ productId: "abuela", quantity: 1 }],
                 deliveryMethod: "pickup",
             },
         });
-        expect(guestPickupRes.status).toBe(201);
-        expect(guestPickupRes.body.data.deliveryMethod).toBe("pickup");
-        expect(guestPickupRes.body.data.addressLabel).toContain("Recoger en el lugar");
-        expect(guestPickupRes.body.data.checkoutUrl).toContain("mercadopago.com.co");
-        expect(guestPickupRes.body.data.order).toBeNull();
+        expect(customerPickupRes.status).toBe(201);
+        expect(customerPickupRes.body.data.deliveryMethod).toBe("pickup");
+        expect(customerPickupRes.body.data.addressLabel).toContain("Recoger en el lugar");
+        expect(customerPickupRes.body.data.checkoutUrl).toContain("mercadopago.com.co");
 
         const authDeliveryRes = await requestApp<{
             data: {
