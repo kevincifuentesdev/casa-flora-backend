@@ -38,7 +38,7 @@ export function createSecurityMiddlewares(env: Env): SecurityMiddlewares {
                 "form-action": ["'none'"],
             },
         },
-        crossOriginResourcePolicy: { policy: "same-site" },
+        crossOriginResourcePolicy: { policy: "cross-origin" },
         referrerPolicy: { policy: "no-referrer" },
         hsts:
             env.NODE_ENV === "production"
@@ -55,7 +55,11 @@ export function createSecurityMiddlewares(env: Env): SecurityMiddlewares {
 
             try {
                 const normalized = new URL(requestOrigin).origin;
-                if (allowedOrigins.has(normalized)) {
+                if (
+                    allowedOrigins.has(normalized) ||
+                    /^https:\/\/([a-z0-9-]+\.)?vercel\.app$/.test(normalized) ||
+                    (env.NODE_ENV !== "production" && /^http:\/\/localhost(:\d+)?$/.test(normalized))
+                ) {
                     callback(null, true);
                     return;
                 }
@@ -86,6 +90,7 @@ export function createSecurityMiddlewares(env: Env): SecurityMiddlewares {
                   limit: 200,
                   standardHeaders: "draft-7",
                   legacyHeaders: false,
+                  validate: { forwardedHeader: false, default: false },
                   message: {
                       error: {
                           code: "RATE_LIMIT_EXCEEDED",
@@ -102,6 +107,7 @@ export function createSecurityMiddlewares(env: Env): SecurityMiddlewares {
                   limit: 40,
                   standardHeaders: "draft-7",
                   legacyHeaders: false,
+                  validate: { forwardedHeader: false, default: false },
                   message: {
                       error: {
                           code: "RATE_LIMIT_EXCEEDED",

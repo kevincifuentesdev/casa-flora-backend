@@ -58,7 +58,7 @@ export function createApp(deps: AppDependencies): Express {
     const logger = deps.logger ?? new LoggerService(deps.env.NODE_ENV === "test");
 
     app.disable("x-powered-by");
-    if (deps.env.TRUST_PROXY) {
+    if (deps.env.TRUST_PROXY || process.env.VERCEL === "1" || deps.env.NODE_ENV === "production") {
         app.set("trust proxy", 1);
     }
 
