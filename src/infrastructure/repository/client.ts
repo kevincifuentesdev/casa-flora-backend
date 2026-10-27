@@ -12,6 +12,7 @@ export function createPrismaClient(connectionString: string): PrismaClient {
         query_timeout: 45000,
         statement_timeout: 45000,
         keepAlive: true,
+        max: 5,
     });
 
     return new PrismaClient({ adapter });

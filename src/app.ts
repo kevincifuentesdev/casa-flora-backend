@@ -140,7 +140,7 @@ export function getOrCreateApp(): Express {
     const env = parseEnv();
     const prisma = createPrismaClient(env.DATABASE_URL);
     const auth = createAuth(prisma, env);
-    const authService = new AuthService(auth);
+    const authService = new AuthService(auth, prisma);
 
     const userRepository = new UserPgRepository(prisma);
     const productRepository = new ProductPgRepository(prisma);
