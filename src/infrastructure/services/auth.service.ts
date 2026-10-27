@@ -134,7 +134,9 @@ export function createAuth(prisma: PrismaClient, env: Env) {
                 usernameValidator: isValidUsername,
             }),
             jwt({
+                disableSettingJwtHeader: true,
                 jwks: {
+                    disablePrivateKeyEncryption: true,
                     keyPairConfig: { alg: "EdDSA", crv: "Ed25519" },
                     rotationInterval: 30 * DAY,
                     gracePeriod: 30 * DAY,
@@ -153,7 +155,10 @@ export function createAuth(prisma: PrismaClient, env: Env) {
 export type Auth = ReturnType<typeof createAuth>;
 
 export class AuthService {
-    constructor(private readonly auth: Auth) {}
+    constructor(
+        private readonly auth: Auth,
+        private readonly prisma?: PrismaClient,
+    ) {}
 
     get handler() {
         return this.auth.handler;
@@ -164,22 +169,60 @@ export class AuthService {
 
         if (authorization !== undefined) {
             const [scheme, token, ...rest] = authorization.split(" ");
-            if (scheme?.toLowerCase() !== "bearer" || !token || rest.length > 0) return null;
-            if (token.length > 4096 || token.split(".").length !== 3) return null;
+            if (scheme?.toLowerCase() === "bearer" && token && rest.length === 0) {
+                if (token.split(".").length === 3) {
+                    try {
+                        const result = await this.auth.api.verifyJWT({ body: { token } });
+                        if (result.payload?.sub) return result.payload.sub;
+                    } catch {
+                        // ignore and check session table
+                    }
+                }
 
-            try {
-                const result = await this.auth.api.verifyJWT({ body: { token } });
-                return result.payload?.sub ?? null;
-            } catch {
-                return null;
+                if (this.prisma) {
+                    try {
+                        const sessionRecord = await this.prisma.session.findUnique({
+                            where: { token },
+                            select: { userId: true, expiresAt: true },
+                        });
+                        if (sessionRecord && sessionRecord.expiresAt > new Date()) {
+                            return sessionRecord.userId;
+                        }
+                    } catch {
+                        // ignore and continue
+                    }
+                }
             }
         }
 
         try {
             const session = await this.auth.api.getSession({ headers: fromNodeHeaders(headers) });
-            return session?.user.id ?? null;
+            if (session?.user?.id) return session.user.id;
         } catch {
-            return null;
+            // fallback to direct cookie lookup
         }
+
+        if (this.prisma && headers.cookie) {
+            try {
+                const match = /(?:^|;\s*)(?:__Secure-)?casa-flora\.session_token=([^;]+)/.exec(headers.cookie);
+                if (match?.[1]) {
+                    const rawCookieVal = decodeURIComponent(match[1]);
+                    const token = rawCookieVal.split(".")[0];
+                    if (token) {
+                        const sessionRecord = await this.prisma.session.findUnique({
+                            where: { token },
+                            select: { userId: true, expiresAt: true },
+                        });
+                        if (sessionRecord && sessionRecord.expiresAt > new Date()) {
+                            return sessionRecord.userId;
+                        }
+                    }
+                }
+            } catch {
+                // ignore
+            }
+        }
+
+        return null;
     }
 }
