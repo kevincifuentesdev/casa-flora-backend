@@ -26,6 +26,7 @@ export function createApiRouter(deps: ApiRouterDependencies): Router {
         res.status(200).json({
             status: "ok",
             service: "casa-flora-backend",
+            version: "0.1.2",
             timestamp: new Date().toISOString(),
         });
     });
