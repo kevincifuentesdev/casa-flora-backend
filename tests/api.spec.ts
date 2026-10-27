@@ -319,7 +319,7 @@ class InMemoryUserRepository implements IUserRepository {
 }
 
 class InMemoryOrderRepository implements IOrderRepository {
-    private readonly orders = new Map<string, Order>();
+    public readonly orders = new Map<string, Order>();
     private seq = 2080;
 
     constructor(private readonly userRepository: InMemoryUserRepository) {}
@@ -689,6 +689,7 @@ class InMemoryBookingRepository implements IBookingRepository {
 
 describe("Casa Flora Backend Clean Architecture & HTTP API", () => {
     let app: Express;
+    let testOrderRepository: InMemoryOrderRepository;
 
     const customerUser: User = {
         id: "user-customer-1",
@@ -783,6 +784,7 @@ describe("Casa Flora Backend Clean Architecture & HTTP API", () => {
 
         const userRepository = new InMemoryUserRepository([customerUser, customerUser2, adminUser]);
         const orderRepository = new InMemoryOrderRepository(userRepository);
+        testOrderRepository = orderRepository;
         const paymentGateway: IPaymentGateway = {
             createCheckoutPreference: async (input) => ({
                 preferenceId: `pref-${input.externalReference}`,
@@ -1151,6 +1153,48 @@ describe("Casa Flora Backend Clean Architecture & HTTP API", () => {
         expect(verifyRes.body.data.status).toBe("approved");
         expect(verifyRes.body.data.order?.status).toBe("preparing");
         expect(verifyRes.body.data.order?.paymentSummary).toContain("Aprobado");
+
+        const timeoutCheckoutRes = await requestApp<{
+            data: {
+                externalReference: string;
+                order: { id: string; status: string } | null;
+            };
+        }>(app, "/api/orders/checkout", {
+            method: "POST",
+            headers: { Authorization: "Bearer token-customer" },
+            body: {
+                items: [{ productId: "abuela", quantity: 1 }],
+                deliveryMethod: "pickup",
+            },
+        });
+        expect(timeoutCheckoutRes.status).toBe(201);
+        const timeoutOrderId = timeoutCheckoutRes.body.data.order?.id ?? "";
+        expect(timeoutOrderId).toBeTruthy();
+
+        const orderToTimeout = testOrderRepository.orders.get(timeoutOrderId);
+        if (orderToTimeout) {
+            orderToTimeout.createdAt = new Date(Date.now() - 95_000);
+        }
+
+        const timeoutVerifyRes = await requestApp<{
+            data: {
+                status: string;
+                order: { status: string; paymentSummary: string } | null;
+            };
+        }>(app, "/api/orders/checkout/verify", {
+            method: "POST",
+            headers: { Authorization: "Bearer token-customer" },
+            body: {
+                externalReference: timeoutCheckoutRes.body.data.externalReference,
+                paymentId: "888888",
+            },
+        });
+        expect(timeoutVerifyRes.status).toBe(200);
+        expect(timeoutVerifyRes.body.data.status).toBe("rejected");
+        expect(timeoutVerifyRes.body.data.order?.status).toBe("cancelled");
+        expect(timeoutVerifyRes.body.data.order?.paymentSummary).toContain(
+            "90 segundos",
+        );
 
         const customerAdminAttempt = await requestApp(app, "/api/orders/admin", {
             headers: { Authorization: "Bearer token-customer" },

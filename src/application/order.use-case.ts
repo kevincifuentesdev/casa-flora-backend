@@ -23,6 +23,8 @@ import type { IProductRepository } from "../domain/repository/IProduct.repositor
 import type { IUserRepository } from "../domain/repository/IUser.repository.js";
 import type { IPaymentGateway } from "../infrastructure/services/payment.service.js";
 
+export const ORDER_PAYMENT_TIMEOUT_MS = 90 * 1000;
+
 export interface CreateOrderItemInput {
     productId: string;
     quantity: number;
@@ -226,6 +228,38 @@ export class OrderUseCase {
                 pointsEarned,
                 items: itemRecords,
             });
+
+            const orderIdToCancel = createdOrder.id;
+            setTimeout(async () => {
+                try {
+                    const currentOrder =
+                        await this.orderRepository.findById(orderIdToCancel);
+                    if (currentOrder && currentOrder.status === "pending") {
+                        let isApproved = false;
+                        if (this.paymentGateway) {
+                            const check =
+                                await this.paymentGateway.verifyPayment({
+                                    externalReference: currentOrder.id,
+                                });
+                            if (check.status === "approved") {
+                                await this.orderRepository.confirmPaymentAndAwardPoints(
+                                    currentOrder.id,
+                                    check.paymentSummary,
+                                );
+                                isApproved = true;
+                            }
+                        }
+                        if (!isApproved) {
+                            await this.orderRepository.markPaymentCancelled(
+                                currentOrder.id,
+                                "Mercado Pago (Cancelado automáticamente tras 90 segundos sin verificación de pago)",
+                            );
+                        }
+                    }
+                } catch {
+                    // ignore timeout errors
+                }
+            }, ORDER_PAYMENT_TIMEOUT_MS).unref?.();
         }
 
         const externalReference = createdOrder
@@ -296,6 +330,22 @@ export class OrderUseCase {
             };
         }
 
+        if (existingOrder && existingOrder.status === "cancelled") {
+            return {
+                externalReference: input.externalReference,
+                status: "rejected",
+                paymentId: null,
+                paymentSummary: existingOrder.paymentSummary,
+                order: existingOrder,
+            };
+        }
+
+        const isTimedOut =
+            Boolean(existingOrder) &&
+            existingOrder!.status === "pending" &&
+            Date.now() - existingOrder!.createdAt.getTime() >=
+                ORDER_PAYMENT_TIMEOUT_MS;
+
         const verification = await this.paymentGateway.verifyPayment({
             externalReference: input.externalReference,
             ...(input.paymentId ? { paymentId: input.paymentId } : {}),
@@ -310,12 +360,23 @@ export class OrderUseCase {
                         existingOrder.id,
                         verification.paymentSummary,
                     );
-            } else if (verification.status === "rejected") {
+            } else if (verification.status === "rejected" || isTimedOut) {
+                const cancelReason =
+                    verification.status === "rejected"
+                        ? verification.paymentSummary
+                        : "Mercado Pago (Cancelado tras 90 segundos sin verificación de pago)";
                 updatedOrder =
                     await this.orderRepository.markPaymentCancelled(
                         existingOrder.id,
-                        verification.paymentSummary,
+                        cancelReason,
                     );
+                return {
+                    externalReference: input.externalReference,
+                    status: "rejected",
+                    paymentId: verification.paymentId,
+                    paymentSummary: cancelReason,
+                    order: updatedOrder,
+                };
             }
         }
 
@@ -359,6 +420,9 @@ export class OrderUseCase {
         let changed = false;
         for (const pending of pendingOrders) {
             try {
+                const isTimedOut =
+                    Date.now() - pending.createdAt.getTime() >=
+                    ORDER_PAYMENT_TIMEOUT_MS;
                 const verification = await this.paymentGateway.verifyPayment({
                     externalReference: pending.id,
                 });
@@ -368,10 +432,12 @@ export class OrderUseCase {
                         verification.paymentSummary,
                     );
                     changed = true;
-                } else if (verification.status === "rejected") {
+                } else if (verification.status === "rejected" || isTimedOut) {
                     await this.orderRepository.markPaymentCancelled(
                         pending.id,
-                        verification.paymentSummary,
+                        verification.status === "rejected"
+                            ? verification.paymentSummary
+                            : "Mercado Pago (Cancelado tras 90 segundos sin verificación de pago)",
                     );
                     changed = true;
                 }
@@ -403,6 +469,9 @@ export class OrderUseCase {
         let changed = false;
         for (const pending of pendingOrders) {
             try {
+                const isTimedOut =
+                    Date.now() - pending.createdAt.getTime() >=
+                    ORDER_PAYMENT_TIMEOUT_MS;
                 const verification = await this.paymentGateway.verifyPayment({
                     externalReference: pending.id,
                 });
@@ -412,10 +481,12 @@ export class OrderUseCase {
                         verification.paymentSummary,
                     );
                     changed = true;
-                } else if (verification.status === "rejected") {
+                } else if (verification.status === "rejected" || isTimedOut) {
                     await this.orderRepository.markPaymentCancelled(
                         pending.id,
-                        verification.paymentSummary,
+                        verification.status === "rejected"
+                            ? verification.paymentSummary
+                            : "Mercado Pago (Cancelado tras 90 segundos sin verificación de pago)",
                     );
                     changed = true;
                 }
