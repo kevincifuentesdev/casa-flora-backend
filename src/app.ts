@@ -44,44 +44,12 @@ export interface AppDependencies {
     logger?: LoggerService;
 }
 
-export function normalizeVercelRequest(req: Request): void {
-    const rawMatched = req.headers["x-matched-path"];
-    const matchedPath = Array.isArray(rawMatched) ? rawMatched[0] : rawMatched;
-
-    let targetPath: string | null = null;
-    if (typeof matchedPath === "string" && matchedPath && !matchedPath.startsWith("/src/app")) {
-        targetPath = matchedPath;
-    } else {
-        const rawForwarded =
-            req.headers["x-forwarded-url"] ??
-            req.headers["x-original-url"] ??
-            req.headers["x-rewrite-url"];
-        const forwarded = Array.isArray(rawForwarded) ? rawForwarded[0] : rawForwarded;
-        if (typeof forwarded === "string" && forwarded) {
-            try {
-                const parsed = new URL(forwarded, "http://localhost");
-                if (parsed.pathname && !parsed.pathname.startsWith("/src/app")) {
-                    targetPath = parsed.pathname;
-                }
-            } catch {
-                if (forwarded.startsWith("/") && !forwarded.startsWith("/src/app")) {
-                    targetPath = forwarded.split("?")[0] ?? null;
-                }
-            }
-        }
-    }
-
-    if (!targetPath && req.url.startsWith("/src/app.js")) {
-        targetPath = "/";
-    }
-
-    if (targetPath) {
+export function normalizeApiPath(req: Request): void {
+    const rawPath = req.url.split("?")[0];
+    if (rawPath && rawPath !== "/" && !rawPath.startsWith("/api")) {
         const queryIndex = req.url.indexOf("?");
         const query = queryIndex !== -1 ? req.url.slice(queryIndex) : "";
-        req.url = targetPath + query;
-        if ((req as { originalUrl?: string }).originalUrl) {
-            (req as { originalUrl: string }).originalUrl = req.url;
-        }
+        req.url = `/api${rawPath.startsWith("/") ? "" : "/"}${rawPath}${query}`;
     }
 }
 
@@ -95,7 +63,7 @@ export function createApp(deps: AppDependencies): Express {
     }
 
     app.use((req, _res, next) => {
-        normalizeVercelRequest(req as Request);
+        normalizeApiPath(req as Request);
         next();
     });
 
@@ -192,6 +160,6 @@ export function getOrCreateApp(): Express {
 }
 
 export default function handler(req: Request, res: Response) {
-    normalizeVercelRequest(req);
+    normalizeApiPath(req);
     return getOrCreateApp()(req, res);
 }
