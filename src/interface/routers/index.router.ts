@@ -3,16 +3,19 @@ import { Router, type RequestHandler } from "express";
 import type { BookingController } from "../controllers/booking.controller.js";
 import type { OrderController } from "../controllers/order.controller.js";
 import type { ProductController } from "../controllers/product.controller.js";
+import type { UploadController } from "../controllers/upload.controller.js";
 import type { UserController } from "../controllers/user.controller.js";
 import type { AuthMiddleware } from "../middlewares/auth.middleware.js";
 import { createBookingRouter } from "./booking.router.js";
 import { createOrderRouter } from "./order.router.js";
 import { createProductRouter } from "./product.router.js";
+import { createUploadRouter } from "./upload.router.js";
 import { createUserRouter } from "./user.router.js";
 
 export interface ApiRouterDependencies {
     userController: UserController;
     productController: ProductController;
+    uploadController: UploadController;
     bookingController: BookingController;
     orderController?: OrderController;
     authMiddleware: AuthMiddleware;
@@ -38,6 +41,10 @@ export function createApiRouter(deps: ApiRouterDependencies): Router {
     router.use(
         "/products",
         createProductRouter(deps.productController, deps.authMiddleware, deps.writeRateLimiter),
+    );
+    router.use(
+        "/uploads",
+        createUploadRouter(deps.uploadController, deps.authMiddleware, deps.writeRateLimiter),
     );
     router.use(
         "/bookings",
