@@ -34,7 +34,10 @@ export function createAuth(prisma: PrismaClient, env: Env) {
         baseURL: env.BETTER_AUTH_URL,
         basePath: AUTH_BASE_PATH,
         secret: env.BETTER_AUTH_SECRET,
-        trustedOrigins: env.CORS_ORIGINS,
+        trustedOrigins: [
+            ...env.CORS_ORIGINS,
+            "https://*.vercel.app",
+        ],
         database: prismaAdapter(prisma, { provider: "postgresql" }),
 
         emailAndPassword: {
@@ -74,7 +77,11 @@ export function createAuth(prisma: PrismaClient, env: Env) {
         advanced: {
             cookiePrefix: "casa-flora",
             useSecureCookies: isProduction,
-            defaultCookieAttributes: { httpOnly: true, sameSite: "lax", secure: isProduction },
+            defaultCookieAttributes: {
+                httpOnly: true,
+                sameSite: isProduction ? "none" : "lax",
+                secure: isProduction,
+            },
             ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
             ...(env.COOKIE_DOMAIN
                 ? { crossSubDomainCookies: { enabled: true, domain: env.COOKIE_DOMAIN } }
