@@ -6,6 +6,7 @@ import {
     bookingIdParamDtoSchema,
     createBookingDtoSchema,
     updateBookingAdminDtoSchema,
+    userBookingQueryDtoSchema,
 } from "../../infrastructure/dtos/booking.dto.js";
 import type { BookingController } from "../controllers/booking.controller.js";
 import type { AuthMiddleware } from "../middlewares/auth.middleware.js";
@@ -28,7 +29,12 @@ export function createBookingRouter(
         bookingController.getAvailability,
     );
 
-    router.get("/me", authMiddleware.requireAuth, bookingController.listMyBookings);
+    router.get(
+        "/me",
+        authMiddleware.requireAuth,
+        validateQuery(userBookingQueryDtoSchema),
+        bookingController.listMyBookings,
+    );
 
     router.get(
         "/admin",

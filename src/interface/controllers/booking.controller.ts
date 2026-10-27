@@ -1,11 +1,13 @@
 import type { Request, RequestHandler, Response } from "express";
 
 import type { BookingUseCase } from "../../application/booking.use-case.js";
+import { paginateArray } from "../../infrastructure/dtos/pagination.dto.js";
 import {
     type AdminBookingQueryDto,
     type BookingAvailabilityQueryDto,
     type CreateBookingDto,
     type UpdateBookingAdminDto,
+    type UserBookingQueryDto,
     toBookingAvailabilityResponseDto,
     toBookingResponseDto,
 } from "../../infrastructure/dtos/booking.dto.js";
@@ -60,11 +62,18 @@ export class BookingController {
         }
     };
 
-    readonly listMyBookings: RequestHandler = async (_req: Request, res: Response, next) => {
+    readonly listMyBookings: RequestHandler = async (req: Request, res: Response, next) => {
         try {
             const user = getAuthenticatedUser(res);
+            const query = (res.locals.validatedQuery ?? req.query) as UserBookingQueryDto;
             const bookings = await this.bookingUseCase.listUserBookings(user.id);
-            res.status(200).json({ data: bookings.map(toBookingResponseDto) });
+            const items = bookings.map(toBookingResponseDto);
+            const { data: pagedItems, pagination } = paginateArray(
+                items,
+                query.page,
+                query.limit,
+            );
+            res.status(200).json({ data: pagedItems, meta: pagination });
         } catch (error) {
             next(error);
         }
@@ -89,7 +98,13 @@ export class BookingController {
                 ...(query.search ? { search: query.search } : {}),
                 ...(query.sort ? { sort: query.sort } : {}),
             });
-            res.status(200).json({ data: bookings.map(toBookingResponseDto) });
+            const items = bookings.map(toBookingResponseDto);
+            const { data: pagedItems, pagination } = paginateArray(
+                items,
+                query.page,
+                query.limit,
+            );
+            res.status(200).json({ data: pagedItems, meta: pagination });
         } catch (error) {
             next(error);
         }

@@ -85,9 +85,17 @@ export const adminBookingQueryDtoSchema = z.object({
     status: z.enum(BOOKING_STATUSES).optional(),
     search: z.string().trim().max(120).optional(),
     sort: z.enum(BOOKING_ADMIN_SORT_OPTIONS).default("earliest"),
+    page: z.coerce.number().int().min(1).optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+});
+
+export const userBookingQueryDtoSchema = z.object({
+    page: z.coerce.number().int().min(1).optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
 });
 
 export type AdminBookingQueryDto = z.infer<typeof adminBookingQueryDtoSchema>;
+export type UserBookingQueryDto = z.infer<typeof userBookingQueryDtoSchema>;
 
 export const updateBookingAdminDtoSchema = z
     .object({

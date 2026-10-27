@@ -1216,4 +1216,47 @@ describe("Casa Flora Backend Clean Architecture & HTTP API", () => {
         );
         expect(missing.status).toBe(404);
     });
+
+    it("paginates products, admin orders and admin bookings endpoints", async () => {
+        const paginatedProducts = await requestApp<{
+            data: Array<{ id: string }>;
+            meta: { total: number; page: number; limit: number; totalPages: number; hasNextPage: boolean };
+        }>(app, "/api/products?page=2&limit=5");
+        expect(paginatedProducts.status).toBe(200);
+        expect(paginatedProducts.body.data.length).toBe(5);
+        expect(paginatedProducts.body.meta.page).toBe(2);
+        expect(paginatedProducts.body.meta.limit).toBe(5);
+        expect(paginatedProducts.body.meta.total).toBe(13);
+        expect(paginatedProducts.body.meta.totalPages).toBe(3);
+        expect(paginatedProducts.body.meta.hasNextPage).toBe(true);
+
+        const paginatedAdminProducts = await requestApp<{
+            data: Array<{ id: string }>;
+            meta: { total: number; page: number; limit: number };
+        }>(app, "/api/products/admin?page=1&limit=4", {
+            headers: { Authorization: "Bearer token-admin" },
+        });
+        expect(paginatedAdminProducts.status).toBe(200);
+        expect(paginatedAdminProducts.body.data.length).toBe(4);
+        expect(paginatedAdminProducts.body.meta.limit).toBe(4);
+
+        const paginatedAdminOrders = await requestApp<{
+            data: Array<{ id: string }>;
+            meta: { page: number; limit: number };
+        }>(app, "/api/orders/admin?page=1&limit=1", {
+            headers: { Authorization: "Bearer token-admin" },
+        });
+        expect(paginatedAdminOrders.status).toBe(200);
+        expect(paginatedAdminOrders.body.data.length).toBe(1);
+        expect(paginatedAdminOrders.body.meta.limit).toBe(1);
+
+        const paginatedAdminBookings = await requestApp<{
+            data: Array<{ id: string }>;
+            meta: { page: number; limit: number };
+        }>(app, "/api/bookings/admin?page=1&limit=1", {
+            headers: { Authorization: "Bearer token-admin" },
+        });
+        expect(paginatedAdminBookings.status).toBe(200);
+        expect(paginatedAdminBookings.body.meta.limit).toBe(1);
+    });
 });

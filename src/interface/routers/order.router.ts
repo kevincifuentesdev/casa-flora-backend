@@ -6,6 +6,7 @@ import {
     createOrderDtoSchema,
     orderIdParamDtoSchema,
     updateOrderStatusDtoSchema,
+    userOrderQueryDtoSchema,
     verifyCheckoutPaymentDtoSchema,
 } from "../../infrastructure/dtos/order.dto.js";
 import type { OrderController } from "../controllers/order.controller.js";
@@ -23,7 +24,12 @@ export function createOrderRouter(
 ): Router {
     const router = Router();
 
-    router.get("/me", authMiddleware.requireAuth, orderController.listMine);
+    router.get(
+        "/me",
+        authMiddleware.requireAuth,
+        validateQuery(userOrderQueryDtoSchema),
+        orderController.listMine,
+    );
     router.get(
         "/admin",
         authMiddleware.requireAdmin,
