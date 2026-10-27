@@ -827,14 +827,18 @@ describe("Casa Flora Backend Clean Architecture & HTTP API", () => {
         expect(res.body.status).toBe("ok");
     });
 
-    it("handles Vercel rewrite with x-matched-path header correctly", async () => {
-        const res = await requestApp<{ status: string }>(app, "/src/app.js", {
-            headers: {
-                "x-matched-path": "/api/health",
-            },
-        });
-        expect(res.status).toBe(200);
-        expect(res.body.status).toBe("ok");
+    it("handles requests with or without /api prefix and root status", async () => {
+        const rootRes = await requestApp<{ service: string; status: string }>(app, "/");
+        expect(rootRes.status).toBe(200);
+        expect(rootRes.body.service).toBe("casa-flora-backend");
+
+        const noPrefixHealthRes = await requestApp<{ status: string }>(app, "/health");
+        expect(noPrefixHealthRes.status).toBe(200);
+        expect(noPrefixHealthRes.body.status).toBe("ok");
+
+        const prefixedHealthRes = await requestApp<{ status: string }>(app, "/api/health");
+        expect(prefixedHealthRes.status).toBe(200);
+        expect(prefixedHealthRes.body.status).toBe("ok");
     });
 
     it("lists, filters and sorts the 12 Casa Flora products", async () => {
