@@ -1,12 +1,14 @@
 import type { Request, RequestHandler, Response } from "express";
 
 import type { OrderUseCase } from "../../application/order.use-case.js";
+import { paginateArray } from "../../infrastructure/dtos/pagination.dto.js";
 import {
     type AdminOrderQueryDto,
     type CheckoutSessionResponseDto,
     type CreateCheckoutDto,
     type CreateOrderDto,
     type UpdateOrderStatusDto,
+    type UserOrderQueryDto,
     type VerifyCheckoutPaymentDto,
     type VerifyCheckoutPaymentResponseDto,
     toOrderResponseDto,
@@ -123,11 +125,18 @@ export class OrderController {
         }
     };
 
-    readonly listMine: RequestHandler = async (_req: Request, res: Response, next) => {
+    readonly listMine: RequestHandler = async (req: Request, res: Response, next) => {
         try {
             const current = getAuthenticatedUser(res);
+            const query = (res.locals.validatedQuery ?? req.query) as UserOrderQueryDto;
             const orders = await this.orderUseCase.listUserOrders(current.id);
-            res.status(200).json({ data: orders.map(toOrderResponseDto) });
+            const items = orders.map(toOrderResponseDto);
+            const { data: pagedItems, pagination } = paginateArray(
+                items,
+                query.page,
+                query.limit,
+            );
+            res.status(200).json({ data: pagedItems, meta: pagination });
         } catch (error) {
             next(error);
         }
@@ -145,7 +154,13 @@ export class OrderController {
                 ...(query.status ? { status: query.status } : {}),
                 ...(query.search ? { search: query.search } : {}),
             });
-            res.status(200).json({ data: orders.map(toOrderResponseDto) });
+            const items = orders.map(toOrderResponseDto);
+            const { data: pagedItems, pagination } = paginateArray(
+                items,
+                query.page,
+                query.limit,
+            );
+            res.status(200).json({ data: pagedItems, meta: pagination });
         } catch (error) {
             next(error);
         }

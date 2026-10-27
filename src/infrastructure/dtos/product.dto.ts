@@ -28,6 +28,8 @@ export const productQueryDtoSchema = z.object({
     categories: categoriesParamSchema.optional(),
     maxPrice: z.coerce.number().int().min(0).max(1_000_000).optional(),
     sort: z.enum(PRODUCT_SORT_OPTIONS).default(DEFAULT_PRODUCT_SORT),
+    page: z.coerce.number().int().min(1).optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
 });
 
 export type ProductQueryDto = z.infer<typeof productQueryDtoSchema>;

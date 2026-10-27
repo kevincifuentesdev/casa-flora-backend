@@ -95,6 +95,13 @@ export const verifyCheckoutPaymentDtoSchema = z.object({
 export const adminOrderQueryDtoSchema = z.object({
     status: z.enum(ORDER_STATUSES).optional(),
     search: z.string().trim().max(120).optional(),
+    page: z.coerce.number().int().min(1).optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+});
+
+export const userOrderQueryDtoSchema = z.object({
+    page: z.coerce.number().int().min(1).optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
 });
 
 export const orderIdParamDtoSchema = z.object({
@@ -111,6 +118,7 @@ export type VerifyCheckoutPaymentDto = z.infer<
     typeof verifyCheckoutPaymentDtoSchema
 >;
 export type AdminOrderQueryDto = z.infer<typeof adminOrderQueryDtoSchema>;
+export type UserOrderQueryDto = z.infer<typeof userOrderQueryDtoSchema>;
 export type UpdateOrderStatusDto = z.infer<typeof updateOrderStatusDtoSchema>;
 
 export interface OrderCustomerSummaryDto {

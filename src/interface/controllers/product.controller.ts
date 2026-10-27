@@ -2,6 +2,7 @@ import type { Request, RequestHandler, Response } from "express";
 
 import type { ProductUseCase } from "../../application/product.use-case.js";
 import { PRODUCT_CATEGORIES } from "../../domain/models/product.js";
+import { paginateArray } from "../../infrastructure/dtos/pagination.dto.js";
 import {
     type CreateProductDto,
     type ProductQueryDto,
@@ -25,11 +26,21 @@ export class ProductController {
 
             const items = products.map(toProductResponseDto);
             const maxPrice = items.reduce((max, item) => Math.max(max, item.price), 0);
+            const { data: pagedItems, pagination } = paginateArray(
+                items,
+                query.page,
+                query.limit,
+            );
 
             res.status(200).json({
-                data: items,
+                data: pagedItems,
                 meta: {
-                    total: items.length,
+                    total: pagination.total,
+                    page: pagination.page,
+                    limit: pagination.limit,
+                    totalPages: pagination.totalPages,
+                    hasNextPage: pagination.hasNextPage,
+                    hasPrevPage: pagination.hasPrevPage,
                     categories: PRODUCT_CATEGORIES,
                     maxPrice,
                 },
@@ -59,11 +70,21 @@ export class ProductController {
                 (max, item) => Math.max(max, item.price),
                 0,
             );
+            const { data: pagedItems, pagination } = paginateArray(
+                items,
+                query.page,
+                query.limit,
+            );
 
             res.status(200).json({
-                data: items,
+                data: pagedItems,
                 meta: {
-                    total: items.length,
+                    total: pagination.total,
+                    page: pagination.page,
+                    limit: pagination.limit,
+                    totalPages: pagination.totalPages,
+                    hasNextPage: pagination.hasNextPage,
+                    hasPrevPage: pagination.hasPrevPage,
                     categories: PRODUCT_CATEGORIES,
                     maxPrice,
                 },
