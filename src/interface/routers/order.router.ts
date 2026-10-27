@@ -33,7 +33,7 @@ export function createOrderRouter(
     router.post(
         "/checkout",
         writeRateLimiter,
-        authMiddleware.optionalAuth,
+        authMiddleware.requireAuth,
         validateBody(createCheckoutDtoSchema),
         orderController.checkout,
     );

@@ -42,8 +42,8 @@ export class OrderController {
 
     readonly checkout: RequestHandler = async (req: Request, res: Response, next) => {
         try {
-            const current = getOptionalAuthenticatedUser(res);
-            if (current?.role === "admin") {
+            const current = getAuthenticatedUser(res);
+            if (current.role === "admin") {
                 res.status(403).json({
                     error: {
                         code: "FORBIDDEN",
@@ -55,7 +55,7 @@ export class OrderController {
             }
             const body = (res.locals.validatedBody ?? req.body) as CreateCheckoutDto;
             const session = await this.orderUseCase.createCheckout(
-                current ? current.id : null,
+                current.id,
                 body,
             );
             const dto: CheckoutSessionResponseDto = {
