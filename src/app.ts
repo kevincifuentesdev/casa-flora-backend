@@ -15,6 +15,10 @@ import { ProductPgRepository } from "./infrastructure/repository/product.pg.repo
 import { UserPgRepository } from "./infrastructure/repository/user.pg.repository.js";
 import { AUTH_BASE_PATH, AuthService, createAuth } from "./infrastructure/services/auth.service.js";
 import { type Env, parseEnv } from "./infrastructure/services/env.service.js";
+import {
+    type IStorageService,
+    S3StorageService,
+} from "./infrastructure/services/storage.service.js";
 import { LoggerService } from "./infrastructure/services/logger.service.js";
 import {
     type IPaymentGateway,
@@ -23,6 +27,7 @@ import {
 import { BookingController } from "./interface/controllers/booking.controller.js";
 import { OrderController } from "./interface/controllers/order.controller.js";
 import { ProductController } from "./interface/controllers/product.controller.js";
+import { UploadController } from "./interface/controllers/upload.controller.js";
 import { UserController } from "./interface/controllers/user.controller.js";
 import { AuthMiddleware } from "./interface/middlewares/auth.middleware.js";
 import {
@@ -41,6 +46,7 @@ export interface AppDependencies {
     bookingRepository: IBookingRepository;
     orderRepository?: IOrderRepository;
     paymentGateway?: IPaymentGateway;
+    storageService?: IStorageService;
     logger?: LoggerService;
 }
 
@@ -112,6 +118,7 @@ export function createApp(deps: AppDependencies): Express {
     const productController = new ProductController(productUseCase);
     const bookingController = new BookingController(bookingUseCase);
     const orderController = orderUseCase ? new OrderController(orderUseCase) : undefined;
+    const uploadController = new UploadController(deps.storageService);
     const authMiddleware = new AuthMiddleware(deps.authService, deps.userRepository);
 
     app.use(
@@ -119,6 +126,7 @@ export function createApp(deps: AppDependencies): Express {
         createApiRouter({
             userController,
             productController,
+            uploadController,
             bookingController,
             ...(orderController ? { orderController } : {}),
             authMiddleware,
@@ -149,6 +157,9 @@ export function getOrCreateApp(): Express {
 
     cachedApp = createApp({
         env,
+        ...(S3StorageService.isConfigured(env)
+            ? { storageService: new S3StorageService(env) }
+            : {}),
         authService,
         userRepository,
         productRepository,

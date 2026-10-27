@@ -61,6 +61,12 @@ const envSchema = z
         JWT_AUDIENCE: z.string().min(1).default("casa-flora"),
         JWT_EXPIRES_IN: z.string().min(2).default("15m"),
 
+        AWS_ENDPOINT_URL_S3: z.url().optional(),
+        AWS_ACCESS_KEY_ID: z.string().min(1).optional(),
+        AWS_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+        AWS_REGION: z.string().min(1).default("us-east-1"),
+        S3_BUCKET: z.string().min(1).default("casa-flora"),
+
         INTERIOR_CAPACITY: z.coerce.number().int().min(1).max(500).default(40),
         PATIO_CAPACITY: z.coerce.number().int().min(1).max(500).default(24),
     })

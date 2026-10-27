@@ -807,6 +807,10 @@ describe("Casa Flora Backend Clean Architecture & HTTP API", () => {
             bookingRepository: new InMemoryBookingRepository(),
             orderRepository,
             paymentGateway,
+            storageService: {
+                put: async () => undefined,
+                get: async () => null,
+            },
         });
     });
 
@@ -1186,5 +1190,30 @@ describe("Casa Flora Backend Clean Architecture & HTTP API", () => {
         });
         expect(adminProductsRes.status).toBe(200);
         expect(adminProductsRes.body.data.length).toBeGreaterThanOrEqual(12);
+    });
+
+    it("protects product image uploads and serves only valid image names", async () => {
+        const anon = await requestApp(app, "/api/uploads/products", { method: "POST" });
+        expect(anon.status).toBe(401);
+
+        const customer = await requestApp(app, "/api/uploads/products", {
+            method: "POST",
+            headers: { Authorization: "Bearer token-customer" },
+        });
+        expect(customer.status).toBe(403);
+
+        const empty = await requestApp(app, "/api/uploads/products", {
+            method: "POST",
+            headers: { Authorization: "Bearer token-admin" },
+        });
+        expect(empty.status).toBe(400);
+
+        const badName = await requestApp(app, "/api/uploads/products/../secret.txt");
+        expect(badName.status).toBe(404);
+        const missing = await requestApp(
+            app,
+            "/api/uploads/products/00000000-0000-0000-0000-000000000000.jpg",
+        );
+        expect(missing.status).toBe(404);
     });
 });
