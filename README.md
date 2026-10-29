@@ -11,7 +11,7 @@ El sistema se divide en dos repositorios desplegados en Vercel:
 | Frontend (Next.js) | `kevincifuentesdev/casa-flora-frontend` | <https://casa-flora-frontend.vercel.app> |
 | Backend (este repo, Express) | `kevincifuentesdev/casa-flora-backend` | <https://casa-flora-backend.vercel.app> |
 
-Verificación rápida del backend desplegado: `GET https://casa-flora-backend.vercel.app/api/health` debe responder `{"status":"ok","service":"casa-flora-backend", ...}`.
+Verificación rápida del backend desplegado: `GET https://casa-flora-bSe añadió un listener de advertencia ante recargas accidentales de la pestaña durante la espera.ackend.vercel.app/api/health` debe responder `{"status":"ok","service":"casa-flora-backend", ...}`.
 
 ### Stack
 
@@ -263,11 +263,6 @@ Captura de la pestaña **Network** (DevTools) de una petición protegida, por ej
 
 ![Network con cookie httpOnly y CORS](./docs/img/network-authorization.png)
 
-Capturas adicionales (opcional):
-
-![Login](./docs/img/login.png)
-![Panel de administración](./docs/img/admin.png)
-
 ## 6. Pruebas
 
 ```bash
@@ -275,4 +270,3 @@ pnpm test
 ```
 
 Cubren validación de dominio, cabeceras de seguridad, filtros y orden del catálogo, autorización (401 y 403), perfil, onboarding, reservas con control de aforo, checkout con Mercado Pago, subida de imágenes y paginación.
-
