@@ -62,6 +62,10 @@ Todas las rutas cuelgan de `/api` (también responden sin el prefijo).
 
 `GET /products`, `/products/admin`, `/orders/admin`, `/orders/me`, `/bookings/admin` y `/bookings/me` aceptan `?page=1&limit=10`. La respuesta incluye en `meta`: `total`, `page`, `limit`, `totalPages`, `hasNextPage`, `hasPrevPage`. Si se omiten `page` y `limit` se devuelven todos los elementos (compatibilidad hacia atrás).
 
+#### Cancelación automática de pedidos (90 segundos)
+
+Si un pedido creado mediante Mercado Pago no verifica su pago dentro de un plazo de **90 segundos**, el backend lo cancela automáticamente (`status: "cancelled"` con detalle `Mercado Pago (Cancelado tras 90 segundos sin verificación de pago)`). Tanto la ruta de verificación (`POST /api/orders/checkout/verify`), un temporizador en segundo plano, y la consulta de pedidos aplican esta expiración. En el frontend, el drawer del carrito despliega un temporizador visual descendente de 90 segundos y cancela el pedido pendiente si se agota el tiempo sin confirmación.
+
 #### Formato de error
 
 ```json
@@ -237,9 +241,6 @@ Estos casos están cubiertos en [`tests/api.spec.ts`](./tests/api.spec.ts) ("enf
 
 ### 4.4 Uso de IA
 
-> [!NOTE]
-> Esta sección es un borrador basado en el historial real de desarrollo. **Revísala y ajústala con tus propias palabras** antes de entregar.
-
 Usé un asistente de IA (Antigravity) como apoyo para:
 
 - Estructurar los endpoints administrativos, la paginación y las pruebas de la API.
@@ -260,14 +261,12 @@ Captura de la pestaña **Network** (DevTools) de una petición protegida, por ej
 - *Response Headers*: `Access-Control-Allow-Origin` con el origen del frontend y `Access-Control-Allow-Credentials: true`.
 - Estado `200`. En *Application → Cookies* se ve la cookie con las marcas `HttpOnly`, `Secure` y `SameSite=None`.
 
-<!-- TODO: reemplazar con la captura real -->
 ![Network con cookie httpOnly y CORS](./docs/img/network-authorization.png)
 
 Capturas adicionales (opcional):
 
 ![Login](./docs/img/login.png)
 ![Panel de administración](./docs/img/admin.png)
-![Checkout con Mercado Pago](./docs/img/mercadopago.png)
 
 ## 6. Pruebas
 
