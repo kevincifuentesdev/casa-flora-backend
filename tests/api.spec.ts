@@ -711,6 +711,27 @@ describe("Casa Flora Backend Clean Architecture & HTTP API", () => {
         updatedAt: new Date("2026-10-20T12:00:00.000Z"),
     };
 
+    const customerUser2: User = {
+        id: "user-customer-2",
+        name: "Carlos Sanchez",
+        firstName: "Carlos",
+        lastName: "Sanchez",
+        birthDate: "1994-03-15",
+        username: "carlossanchez",
+        email: "carlos@casaflora.co",
+        emailVerified: true,
+        role: "customer",
+        points: 0,
+        onboardingCompleted: false,
+        dietPreference: null,
+        spiceTolerance: null,
+        favoriteMoment: null,
+        addresses: [],
+        paymentMethods: [],
+        createdAt: new Date("2026-10-20T12:00:00.000Z"),
+        updatedAt: new Date("2026-10-20T12:00:00.000Z"),
+    };
+
     const adminUser: User = {
         id: "user-admin-1",
         name: "Kevin Cifuentes",
@@ -754,12 +775,13 @@ describe("Casa Flora Backend Clean Architecture & HTTP API", () => {
             resolveUserId: async (headers: IncomingHttpHeaders) => {
                 const authHeader = headers.authorization;
                 if (authHeader === "Bearer token-customer") return customerUser.id;
+                if (authHeader === "Bearer token-customer-2") return customerUser2.id;
                 if (authHeader === "Bearer token-admin") return adminUser.id;
                 return null;
             },
         } as unknown as AuthService;
 
-        const userRepository = new InMemoryUserRepository([customerUser, adminUser]);
+        const userRepository = new InMemoryUserRepository([customerUser, customerUser2, adminUser]);
         const orderRepository = new InMemoryOrderRepository(userRepository);
         const paymentGateway: IPaymentGateway = {
             createCheckoutPreference: async (input) => ({
@@ -961,7 +983,7 @@ describe("Casa Flora Backend Clean Architecture & HTTP API", () => {
 
         const overCapacityRes = await requestApp(app, "/api/bookings", {
             method: "POST",
-            headers: { Authorization: "Bearer token-admin" },
+            headers: { Authorization: "Bearer token-customer-2" },
             body: {
                 environment: "patio",
                 date: dateIso,
@@ -970,6 +992,18 @@ describe("Casa Flora Backend Clean Architecture & HTTP API", () => {
             },
         });
         expect(overCapacityRes.status).toBe(409);
+
+        const adminBookingForbidden = await requestApp(app, "/api/bookings", {
+            method: "POST",
+            headers: { Authorization: "Bearer token-admin" },
+            body: {
+                environment: "patio",
+                date: dateIso,
+                time: "19:00",
+                diners: 2,
+            },
+        });
+        expect(adminBookingForbidden.status).toBe(403);
 
         const availabilityRes = await requestApp<{
             data: { slots: Array<{ time: string; remainingDiners: number }> };

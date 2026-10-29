@@ -22,6 +22,16 @@ export class OrderController {
     readonly create: RequestHandler = async (req: Request, res: Response, next) => {
         try {
             const current = getAuthenticatedUser(res);
+            if (current.role === "admin") {
+                res.status(403).json({
+                    error: {
+                        code: "FORBIDDEN",
+                        message:
+                            "Las cuentas de administrador no pueden realizar pedidos. Gestiona los pedidos en el panel de administración.",
+                    },
+                });
+                return;
+            }
             const body = (res.locals.validatedBody ?? req.body) as CreateOrderDto;
             const order = await this.orderUseCase.createOrder(current.id, body);
             res.status(201).json({ data: toOrderResponseDto(order) });
@@ -33,6 +43,16 @@ export class OrderController {
     readonly checkout: RequestHandler = async (req: Request, res: Response, next) => {
         try {
             const current = getOptionalAuthenticatedUser(res);
+            if (current?.role === "admin") {
+                res.status(403).json({
+                    error: {
+                        code: "FORBIDDEN",
+                        message:
+                            "Las cuentas de administrador no pueden realizar pedidos. Gestiona los pedidos en el panel de administración.",
+                    },
+                });
+                return;
+            }
             const body = (res.locals.validatedBody ?? req.body) as CreateCheckoutDto;
             const session = await this.orderUseCase.createCheckout(
                 current ? current.id : null,

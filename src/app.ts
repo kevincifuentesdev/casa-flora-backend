@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type Express, type Request, type Response } from "express";
 
 import { BookingUseCase } from "./application/booking.use-case.js";
 import { OrderUseCase } from "./application/order.use-case.js";
@@ -8,8 +8,13 @@ import type { IBookingRepository } from "./domain/repository/IBooking.repository
 import type { IOrderRepository } from "./domain/repository/IOrder.repository.js";
 import type { IProductRepository } from "./domain/repository/IProduct.repository.js";
 import type { IUserRepository } from "./domain/repository/IUser.repository.js";
-import { AUTH_BASE_PATH, type AuthService } from "./infrastructure/services/auth.service.js";
-import type { Env } from "./infrastructure/services/env.service.js";
+import { BookingPgRepository } from "./infrastructure/repository/booking.pg.repository.js";
+import { createPrismaClient } from "./infrastructure/repository/client.js";
+import { OrderPgRepository } from "./infrastructure/repository/order.pg.repository.js";
+import { ProductPgRepository } from "./infrastructure/repository/product.pg.repository.js";
+import { UserPgRepository } from "./infrastructure/repository/user.pg.repository.js";
+import { AUTH_BASE_PATH, AuthService, createAuth } from "./infrastructure/services/auth.service.js";
+import { type Env, parseEnv } from "./infrastructure/services/env.service.js";
 import { LoggerService } from "./infrastructure/services/logger.service.js";
 import {
     type IPaymentGateway,
@@ -103,4 +108,35 @@ export function createApp(deps: AppDependencies): Express {
     app.use(createErrorMiddleware(logger));
 
     return app;
+}
+
+let cachedApp: Express | null = null;
+
+export function getOrCreateApp(): Express {
+    if (cachedApp) return cachedApp;
+
+    const env = parseEnv();
+    const prisma = createPrismaClient(env.DATABASE_URL);
+    const auth = createAuth(prisma, env);
+    const authService = new AuthService(auth);
+
+    const userRepository = new UserPgRepository(prisma);
+    const productRepository = new ProductPgRepository(prisma);
+    const bookingRepository = new BookingPgRepository(prisma);
+    const orderRepository = new OrderPgRepository(prisma);
+
+    cachedApp = createApp({
+        env,
+        authService,
+        userRepository,
+        productRepository,
+        bookingRepository,
+        orderRepository,
+    });
+
+    return cachedApp;
+}
+
+export default function handler(req: Request, res: Response) {
+    return getOrCreateApp()(req, res);
 }

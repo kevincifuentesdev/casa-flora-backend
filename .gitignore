@@ -11,9 +11,6 @@ coverage/
 .env.*
 !.env.example
 
-# prisma generated client
-src/infrastructure/repository/generated/
-
 # logs / os / editors
 *.log
 .DS_Store

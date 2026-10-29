@@ -51,10 +51,11 @@ export class UserUseCase {
 
     async getProfileContext(userId: string): Promise<UserProfileContext> {
         let user = await this.getProfile(userId);
-        let [products, orders] = await Promise.all([
+        const [products, initialOrders] = await Promise.all([
             this.productRepository ? this.productRepository.findAll() : Promise.resolve([]),
             this.orderRepository ? this.orderRepository.findByUserId(userId) : Promise.resolve([]),
         ]);
+        let orders = initialOrders;
 
         if (this.orderRepository && this.paymentGateway) {
             const pendingOrders = orders.filter((o) => o.status === "pending");
