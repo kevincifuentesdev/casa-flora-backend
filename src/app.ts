@@ -44,6 +44,47 @@ export interface AppDependencies {
     logger?: LoggerService;
 }
 
+export function normalizeVercelRequest(req: Request): void {
+    const rawMatched = req.headers["x-matched-path"];
+    const matchedPath = Array.isArray(rawMatched) ? rawMatched[0] : rawMatched;
+
+    let targetPath: string | null = null;
+    if (typeof matchedPath === "string" && matchedPath && !matchedPath.startsWith("/src/app")) {
+        targetPath = matchedPath;
+    } else {
+        const rawForwarded =
+            req.headers["x-forwarded-url"] ??
+            req.headers["x-original-url"] ??
+            req.headers["x-rewrite-url"];
+        const forwarded = Array.isArray(rawForwarded) ? rawForwarded[0] : rawForwarded;
+        if (typeof forwarded === "string" && forwarded) {
+            try {
+                const parsed = new URL(forwarded, "http://localhost");
+                if (parsed.pathname && !parsed.pathname.startsWith("/src/app")) {
+                    targetPath = parsed.pathname;
+                }
+            } catch {
+                if (forwarded.startsWith("/") && !forwarded.startsWith("/src/app")) {
+                    targetPath = forwarded.split("?")[0] ?? null;
+                }
+            }
+        }
+    }
+
+    if (!targetPath && req.url.startsWith("/src/app.js")) {
+        targetPath = "/";
+    }
+
+    if (targetPath) {
+        const queryIndex = req.url.indexOf("?");
+        const query = queryIndex !== -1 ? req.url.slice(queryIndex) : "";
+        req.url = targetPath + query;
+        if ((req as { originalUrl?: string }).originalUrl) {
+            (req as { originalUrl: string }).originalUrl = req.url;
+        }
+    }
+}
+
 export function createApp(deps: AppDependencies): Express {
     const app = express();
     const logger = deps.logger ?? new LoggerService(deps.env.NODE_ENV === "test");
@@ -53,12 +94,25 @@ export function createApp(deps: AppDependencies): Express {
         app.set("trust proxy", 1);
     }
 
+    app.use((req, _res, next) => {
+        normalizeVercelRequest(req as Request);
+        next();
+    });
+
     const security = createSecurityMiddlewares(deps.env);
 
     app.use(security.helmetMiddleware);
     app.use(security.corsMiddleware);
     app.use(security.clientIpMiddleware);
     app.use(security.apiRateLimiter);
+
+    app.get("/", (_req, res) => {
+        res.status(200).json({
+            service: "casa-flora-backend",
+            status: "running",
+            version: "0.1.0",
+        });
+    });
 
     app.use(AUTH_BASE_PATH, createAuthRouter(deps.authService));
 
@@ -138,5 +192,6 @@ export function getOrCreateApp(): Express {
 }
 
 export default function handler(req: Request, res: Response) {
+    normalizeVercelRequest(req);
     return getOrCreateApp()(req, res);
 }
