@@ -1,9 +1,11 @@
 import { Router, type RequestHandler } from "express";
 
 import {
+    adminBookingQueryDtoSchema,
     bookingAvailabilityQueryDtoSchema,
     bookingIdParamDtoSchema,
     createBookingDtoSchema,
+    updateBookingAdminDtoSchema,
 } from "../../infrastructure/dtos/booking.dto.js";
 import type { BookingController } from "../controllers/booking.controller.js";
 import type { AuthMiddleware } from "../middlewares/auth.middleware.js";
@@ -28,6 +30,13 @@ export function createBookingRouter(
 
     router.get("/me", authMiddleware.requireAuth, bookingController.listMyBookings);
 
+    router.get(
+        "/admin",
+        authMiddleware.requireAdmin,
+        validateQuery(adminBookingQueryDtoSchema),
+        bookingController.listAllAdmin,
+    );
+
     router.post(
         "/",
         writeRateLimiter,
@@ -41,6 +50,15 @@ export function createBookingRouter(
         authMiddleware.requireAuth,
         validateParams(bookingIdParamDtoSchema),
         bookingController.getBookingById,
+    );
+
+    router.patch(
+        "/:id",
+        writeRateLimiter,
+        authMiddleware.requireAdmin,
+        validateParams(bookingIdParamDtoSchema),
+        validateBody(updateBookingAdminDtoSchema),
+        bookingController.updateBookingAdmin,
     );
 
     router.patch(

@@ -60,17 +60,18 @@ export function createApp(deps: AppDependencies): Express {
     app.use(express.json({ limit: "32kb" }));
     app.use(express.urlencoded({ extended: false, limit: "32kb" }));
 
+    const paymentGateway = deps.paymentGateway ?? new MercadoPagoGateway(deps.env);
     const userUseCase = new UserUseCase(
         deps.userRepository,
         deps.productRepository,
         deps.orderRepository,
+        paymentGateway,
     );
     const productUseCase = new ProductUseCase(deps.productRepository);
     const bookingUseCase = new BookingUseCase(deps.bookingRepository, {
         interior: deps.env.INTERIOR_CAPACITY,
         patio: deps.env.PATIO_CAPACITY,
     });
-    const paymentGateway = deps.paymentGateway ?? new MercadoPagoGateway(deps.env);
     const orderUseCase = deps.orderRepository
         ? new OrderUseCase(
               deps.orderRepository,

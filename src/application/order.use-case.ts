@@ -3,12 +3,19 @@ import {
     AddressNotFoundError,
     DeliveryAddressRequiredError,
     EmptyOrderItemsError,
+    OrderNotFoundError,
     PaymentGatewayError,
 } from "./errors/order.error.js";
 import { ProductNotFoundError } from "./errors/product.error.js";
-import type { DeliveryMethod, Order } from "../domain/models/order.js";
+import type {
+    DeliveryMethod,
+    Order,
+    OrderStatus,
+    PaymentVerificationStatus,
+} from "../domain/models/order.js";
 import { calculateOrderPoints } from "../domain/models/user.js";
 import type {
+    AdminOrderFilters,
     CreateOrderItemRecordInput,
     IOrderRepository,
 } from "../domain/repository/IOrder.repository.js";
@@ -45,12 +52,26 @@ export interface CreateCheckoutUseCaseInput {
 
 export interface CheckoutSessionResult {
     preferenceId: string;
+    externalReference: string;
     checkoutUrl: string;
     sandboxCheckoutUrl: string;
     deliveryMethod: DeliveryMethod;
     addressLabel: string;
     totalAmount: number;
     pointsEarned: number;
+    order: Order | null;
+}
+
+export interface VerifyCheckoutPaymentUseCaseInput {
+    externalReference: string;
+    paymentId?: string;
+}
+
+export interface VerifyCheckoutPaymentResult {
+    externalReference: string;
+    status: PaymentVerificationStatus;
+    paymentId: string | null;
+    paymentSummary: string;
     order: Order | null;
 }
 
@@ -197,10 +218,10 @@ export class OrderUseCase {
         let createdOrder: Order | null = null;
 
         if (user) {
-            createdOrder = await this.orderRepository.createAndAwardPoints({
+            createdOrder = await this.orderRepository.createPendingOrder({
                 userId: user.id,
                 addressLabel,
-                paymentSummary: "Mercado Pago Checkout Pro",
+                paymentSummary: "Mercado Pago (Pendiente de pago)",
                 totalAmount,
                 pointsEarned,
                 items: itemRecords,
@@ -228,6 +249,7 @@ export class OrderUseCase {
 
         return {
             preferenceId: preference.preferenceId,
+            externalReference,
             checkoutUrl: preference.checkoutUrl,
             sandboxCheckoutUrl: preference.sandboxCheckoutUrl,
             deliveryMethod: input.deliveryMethod,
@@ -238,7 +260,208 @@ export class OrderUseCase {
         };
     }
 
+    async verifyCheckoutPayment(
+        userId: string | null,
+        input: VerifyCheckoutPaymentUseCaseInput,
+    ): Promise<VerifyCheckoutPaymentResult> {
+        if (!this.paymentGateway) {
+            throw new PaymentGatewayError("Pasarela de pagos no configurada.");
+        }
+
+        const existingOrder = await this.orderRepository.findById(
+            input.externalReference,
+        );
+
+        if (existingOrder && userId && existingOrder.userId !== userId) {
+            return {
+                externalReference: input.externalReference,
+                status: "pending",
+                paymentId: null,
+                paymentSummary: "Mercado Pago (Pendiente de pago)",
+                order: null,
+            };
+        }
+
+        if (
+            existingOrder &&
+            (existingOrder.status === "preparing" ||
+                existingOrder.status === "delivered")
+        ) {
+            return {
+                externalReference: input.externalReference,
+                status: "approved",
+                paymentId: null,
+                paymentSummary: existingOrder.paymentSummary,
+                order: existingOrder,
+            };
+        }
+
+        const verification = await this.paymentGateway.verifyPayment({
+            externalReference: input.externalReference,
+            ...(input.paymentId ? { paymentId: input.paymentId } : {}),
+        });
+
+        let updatedOrder: Order | null = existingOrder;
+
+        if (existingOrder) {
+            if (verification.status === "approved") {
+                updatedOrder =
+                    await this.orderRepository.confirmPaymentAndAwardPoints(
+                        existingOrder.id,
+                        verification.paymentSummary,
+                    );
+            } else if (verification.status === "rejected") {
+                updatedOrder =
+                    await this.orderRepository.markPaymentCancelled(
+                        existingOrder.id,
+                        verification.paymentSummary,
+                    );
+            }
+        }
+
+        return {
+            externalReference: input.externalReference,
+            status: verification.status,
+            paymentId: verification.paymentId,
+            paymentSummary: verification.paymentSummary,
+            order: updatedOrder,
+        };
+    }
+
+    async cancelPendingOrder(
+        userId: string,
+        orderId: string,
+    ): Promise<Order | null> {
+        const existing = await this.orderRepository.findById(orderId);
+        if (!existing || existing.userId !== userId) {
+            return null;
+        }
+        if (existing.status !== "pending") {
+            return existing;
+        }
+        return this.orderRepository.markPaymentCancelled(
+            existing.id,
+            "Mercado Pago (Pago cancelado)",
+        );
+    }
+
     async listUserOrders(userId: string): Promise<Order[]> {
+        const orders = await this.orderRepository.findByUserId(userId);
+        if (!this.paymentGateway) {
+            return orders;
+        }
+
+        const pendingOrders = orders.filter((o) => o.status === "pending");
+        if (pendingOrders.length === 0) {
+            return orders;
+        }
+
+        let changed = false;
+        for (const pending of pendingOrders) {
+            try {
+                const verification = await this.paymentGateway.verifyPayment({
+                    externalReference: pending.id,
+                });
+                if (verification.status === "approved") {
+                    await this.orderRepository.confirmPaymentAndAwardPoints(
+                        pending.id,
+                        verification.paymentSummary,
+                    );
+                    changed = true;
+                } else if (verification.status === "rejected") {
+                    await this.orderRepository.markPaymentCancelled(
+                        pending.id,
+                        verification.paymentSummary,
+                    );
+                    changed = true;
+                }
+            } catch {
+                void 0;
+            }
+        }
+
+        if (!changed) {
+            return orders;
+        }
+
         return this.orderRepository.findByUserId(userId);
+    }
+
+    async listAllOrdersForAdmin(
+        filters: AdminOrderFilters = {},
+    ): Promise<Order[]> {
+        const orders = await this.orderRepository.findAllForAdmin(filters);
+        if (!this.paymentGateway) {
+            return orders;
+        }
+
+        const pendingOrders = orders.filter((o) => o.status === "pending");
+        if (pendingOrders.length === 0) {
+            return orders;
+        }
+
+        let changed = false;
+        for (const pending of pendingOrders) {
+            try {
+                const verification = await this.paymentGateway.verifyPayment({
+                    externalReference: pending.id,
+                });
+                if (verification.status === "approved") {
+                    await this.orderRepository.confirmPaymentAndAwardPoints(
+                        pending.id,
+                        verification.paymentSummary,
+                    );
+                    changed = true;
+                } else if (verification.status === "rejected") {
+                    await this.orderRepository.markPaymentCancelled(
+                        pending.id,
+                        verification.paymentSummary,
+                    );
+                    changed = true;
+                }
+            } catch {
+                void 0;
+            }
+        }
+
+        if (!changed) {
+            return orders;
+        }
+
+        return this.orderRepository.findAllForAdmin(filters);
+    }
+
+    async updateOrderStatusByAdmin(
+        orderId: string,
+        status: OrderStatus,
+    ): Promise<Order> {
+        const existing = await this.orderRepository.findById(orderId);
+        if (!existing) {
+            throw new OrderNotFoundError();
+        }
+
+        let paymentSummary: string | undefined;
+        if (
+            existing.status === "pending" &&
+            (status === "preparing" || status === "delivered") &&
+            existing.paymentSummary.includes("Pendiente")
+        ) {
+            paymentSummary = "Confirmado por administración";
+        } else if (
+            status === "cancelled" &&
+            existing.paymentSummary.includes("Pendiente")
+        ) {
+            paymentSummary = "Cancelado por administración";
+        }
+
+        const updated = await this.orderRepository.updateOrderStatus(
+            orderId,
+            status,
+            paymentSummary,
+        );
+        if (!updated) {
+            throw new OrderNotFoundError();
+        }
+        return updated;
     }
 }

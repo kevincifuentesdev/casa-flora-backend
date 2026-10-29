@@ -4,21 +4,82 @@ import {
     DuplicateBookingSlotError,
 } from "../../application/errors/booking.error.js";
 import {
+    BOOKING_STATUSES,
     BOOKING_TIME_SLOTS,
     type Booking,
+    type BookingCustomerSummary,
     type BookingStatus,
     type BookingTimeSlot,
     type EnvironmentId,
 } from "../../domain/models/booking.js";
 import type {
+    AdminBookingFilters,
     CreateBookingInput,
     IBookingRepository,
     ReserveBookingAtomicInput,
+    UpdateBookingAdminInput,
 } from "../../domain/repository/IBooking.repository.js";
 import type { PrismaClient } from "./client.js";
 import type { Booking as PrismaBooking } from "./generated/client.js";
 
-function toDomain(row: PrismaBooking): Booking {
+type PrismaBookingUserSummary = {
+    id: string;
+    name: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    username: string | null;
+    points: number;
+    dietPreference: string | null;
+    spiceTolerance: string | null;
+    favoriteMoment: string | null;
+};
+
+type PrismaBookingWithUser = PrismaBooking & {
+    user?: PrismaBookingUserSummary | null;
+};
+
+const bookingIncludeWithUser = {
+    user: {
+        select: {
+            id: true,
+            name: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            username: true,
+            points: true,
+            dietPreference: true,
+            spiceTolerance: true,
+            favoriteMoment: true,
+        },
+    },
+} as const;
+
+function toBookingStatus(value: string): BookingStatus {
+    return (BOOKING_STATUSES as readonly string[]).includes(value)
+        ? (value as BookingStatus)
+        : "confirmed";
+}
+
+function toCustomerDomain(
+    row: PrismaBookingUserSummary,
+): BookingCustomerSummary {
+    return {
+        id: row.id,
+        name: row.name,
+        firstName: row.firstName,
+        lastName: row.lastName,
+        email: row.email,
+        username: row.username,
+        points: row.points,
+        dietPreference: row.dietPreference,
+        spiceTolerance: row.spiceTolerance,
+        favoriteMoment: row.favoriteMoment,
+    };
+}
+
+function toDomain(row: PrismaBookingWithUser): Booking {
     return {
         id: row.id,
         userId: row.userId,
@@ -26,7 +87,8 @@ function toDomain(row: PrismaBooking): Booking {
         date: row.date,
         time: row.time as BookingTimeSlot,
         diners: row.diners,
-        status: row.status as BookingStatus,
+        status: toBookingStatus(row.status),
+        ...(row.user ? { customer: toCustomerDomain(row.user) } : {}),
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
     };
@@ -45,6 +107,7 @@ export class BookingPgRepository implements IBookingRepository {
                 diners: input.diners,
                 status: "confirmed",
             },
+            include: bookingIncludeWithUser,
         });
         return toDomain(row);
     }
@@ -57,7 +120,7 @@ export class BookingPgRepository implements IBookingRepository {
                         userId: input.userId,
                         date: input.date,
                         time: input.time,
-                        status: "confirmed",
+                        status: { in: ["confirmed", "seated"] },
                     },
                 });
 
@@ -70,7 +133,7 @@ export class BookingPgRepository implements IBookingRepository {
                         date: input.date,
                         time: input.time,
                         environment: input.environment,
-                        status: "confirmed",
+                        status: { in: ["confirmed", "seated"] },
                     },
                     _sum: { diners: true },
                 });
@@ -91,6 +154,7 @@ export class BookingPgRepository implements IBookingRepository {
                         diners: input.diners,
                         status: "confirmed",
                     },
+                    include: bookingIncludeWithUser,
                 });
 
                 return toDomain(created);
@@ -100,16 +164,83 @@ export class BookingPgRepository implements IBookingRepository {
     }
 
     async findById(id: string): Promise<Booking | null> {
-        const row = await this.prisma.booking.findUnique({ where: { id } });
+        const row = await this.prisma.booking.findUnique({
+            where: { id },
+            include: bookingIncludeWithUser,
+        });
         return row ? toDomain(row) : null;
     }
 
     async findByUserId(userId: string): Promise<Booking[]> {
         const rows = await this.prisma.booking.findMany({
             where: { userId },
+            include: bookingIncludeWithUser,
             orderBy: [{ date: "desc" }, { time: "desc" }, { createdAt: "desc" }],
         });
         return rows.map(toDomain);
+    }
+
+    async findAllForAdmin(filters: AdminBookingFilters = {}): Promise<Booking[]> {
+        const sort = filters.sort ?? "earliest";
+        const orderBy =
+            sort === "latest"
+                ? [
+                      { date: "desc" as const },
+                      { time: "desc" as const },
+                      { createdAt: "desc" as const },
+                  ]
+                : sort === "diners-desc"
+                  ? [
+                        { diners: "desc" as const },
+                        { date: "asc" as const },
+                        { time: "asc" as const },
+                    ]
+                  : [
+                        { date: "asc" as const },
+                        { time: "asc" as const },
+                        { createdAt: "asc" as const },
+                    ];
+
+        const rows = await this.prisma.booking.findMany({
+            where: {
+                ...(filters.date
+                    ? { date: filters.date }
+                    : filters.dateFrom || filters.dateTo
+                      ? {
+                            date: {
+                                ...(filters.dateFrom
+                                    ? { gte: filters.dateFrom }
+                                    : {}),
+                                ...(filters.dateTo
+                                    ? { lte: filters.dateTo }
+                                    : {}),
+                            },
+                        }
+                      : {}),
+                ...(filters.environment
+                    ? { environment: filters.environment }
+                    : {}),
+                ...(filters.status ? { status: filters.status } : {}),
+            },
+            include: bookingIncludeWithUser,
+            orderBy,
+        });
+
+        const mapped = rows.map(toDomain);
+        const query = filters.search?.trim().toLowerCase();
+        if (!query) {
+            return mapped;
+        }
+
+        return mapped.filter((b) => {
+            const idMatch = b.id.toLowerCase().includes(query);
+            const customerMatch =
+                b.customer?.name.toLowerCase().includes(query) ||
+                b.customer?.email.toLowerCase().includes(query) ||
+                (b.customer?.username?.toLowerCase().includes(query) ?? false);
+            const dateMatch = b.date.includes(query) || b.time.includes(query);
+            return idMatch || customerMatch || dateMatch;
+        });
     }
 
     async findActiveByUserSlot(
@@ -122,8 +253,9 @@ export class BookingPgRepository implements IBookingRepository {
                 userId,
                 date,
                 time,
-                status: "confirmed",
+                status: { in: ["confirmed", "seated"] },
             },
+            include: bookingIncludeWithUser,
         });
         return row ? toDomain(row) : null;
     }
@@ -138,7 +270,7 @@ export class BookingPgRepository implements IBookingRepository {
                 date,
                 time,
                 environment,
-                status: "confirmed",
+                status: { in: ["confirmed", "seated"] },
             },
             _sum: { diners: true },
         });
@@ -154,7 +286,7 @@ export class BookingPgRepository implements IBookingRepository {
             where: {
                 date,
                 environment,
-                status: "confirmed",
+                status: { in: ["confirmed", "seated"] },
             },
             _sum: { diners: true },
         });
@@ -180,6 +312,43 @@ export class BookingPgRepository implements IBookingRepository {
             const row = await this.prisma.booking.update({
                 where: { id },
                 data: { status },
+                include: bookingIncludeWithUser,
+            });
+            return toDomain(row);
+        } catch (error) {
+            if (
+                typeof error === "object" &&
+                error !== null &&
+                "code" in error &&
+                (error as { code?: string }).code === "P2025"
+            ) {
+                throw new BookingNotFoundError();
+            }
+            throw error;
+        }
+    }
+
+    async updateByAdmin(
+        id: string,
+        input: UpdateBookingAdminInput,
+    ): Promise<Booking> {
+        try {
+            const row = await this.prisma.booking.update({
+                where: { id },
+                data: {
+                    ...(input.environment !== undefined
+                        ? { environment: input.environment }
+                        : {}),
+                    ...(input.date !== undefined ? { date: input.date } : {}),
+                    ...(input.time !== undefined ? { time: input.time } : {}),
+                    ...(input.diners !== undefined
+                        ? { diners: input.diners }
+                        : {}),
+                    ...(input.status !== undefined
+                        ? { status: input.status }
+                        : {}),
+                },
+                include: bookingIncludeWithUser,
             });
             return toDomain(row);
         } catch (error) {

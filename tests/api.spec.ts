@@ -29,7 +29,7 @@ import {
     type EnvironmentId,
     formatBogotaDate,
 } from "../src/domain/models/booking.js";
-import type { Order } from "../src/domain/models/order.js";
+import type { Order, OrderStatus } from "../src/domain/models/order.js";
 import {
     INITIAL_PRODUCTS,
     type Product,
@@ -44,11 +44,14 @@ import {
     validatePersonName,
 } from "../src/domain/models/user.js";
 import type {
+    AdminBookingFilters,
     CreateBookingInput,
     IBookingRepository,
     ReserveBookingAtomicInput,
+    UpdateBookingAdminInput,
 } from "../src/domain/repository/IBooking.repository.js";
 import type {
+    AdminOrderFilters,
     CreateOrderRecordInput,
     IOrderRepository,
 } from "../src/domain/repository/IOrder.repository.js";
@@ -347,8 +350,115 @@ class InMemoryOrderRepository implements IOrderRepository {
         return order;
     }
 
+    async createPendingOrder(input: CreateOrderRecordInput): Promise<Order> {
+        const now = new Date();
+        const orderNumber = ++this.seq;
+        const orderId = `order-${orderNumber}`;
+        const order: Order = {
+            id: orderId,
+            orderNumber,
+            userId: input.userId,
+            addressLabel: input.addressLabel,
+            paymentSummary: input.paymentSummary,
+            totalAmount: input.totalAmount,
+            pointsEarned: input.pointsEarned,
+            status: "pending",
+            items: input.items.map((item, idx) => ({
+                id: `${orderId}-item-${idx + 1}`,
+                orderId,
+                ...item,
+            })),
+            createdAt: now,
+            updatedAt: now,
+        };
+        this.orders.set(order.id, order);
+        return order;
+    }
+
+    async findById(orderId: string): Promise<Order | null> {
+        return this.orders.get(orderId) ?? null;
+    }
+
     async findByUserId(userId: string): Promise<Order[]> {
         return Array.from(this.orders.values()).filter((o) => o.userId === userId);
+    }
+
+    async findAllForAdmin(filters: AdminOrderFilters = {}): Promise<Order[]> {
+        let result = Array.from(this.orders.values());
+        if (filters.status) {
+            result = result.filter((o) => o.status === filters.status);
+        }
+        if (filters.search) {
+            const q = filters.search.trim().toLowerCase();
+            result = result.filter(
+                (o) =>
+                    String(o.orderNumber).includes(q) ||
+                    o.addressLabel.toLowerCase().includes(q) ||
+                    o.items.some((i) => i.productName.toLowerCase().includes(q)),
+            );
+        }
+        return result.sort((a, b) => b.orderNumber - a.orderNumber);
+    }
+
+    async updateOrderStatus(
+        orderId: string,
+        status: OrderStatus,
+        paymentSummary?: string,
+    ): Promise<Order | null> {
+        const current = this.orders.get(orderId);
+        if (!current) return null;
+        if (
+            current.status === "pending" &&
+            (status === "preparing" || status === "delivered")
+        ) {
+            this.userRepository.incrementPoints(
+                current.userId,
+                current.pointsEarned,
+            );
+        }
+        const updated: Order = {
+            ...current,
+            status,
+            ...(paymentSummary ? { paymentSummary } : {}),
+            updatedAt: new Date(),
+        };
+        this.orders.set(orderId, updated);
+        return updated;
+    }
+
+    async confirmPaymentAndAwardPoints(
+        orderId: string,
+        paymentSummary: string,
+    ): Promise<Order | null> {
+        const current = this.orders.get(orderId);
+        if (!current) return null;
+        if (current.status !== "pending") return current;
+        const updated: Order = {
+            ...current,
+            status: "preparing",
+            paymentSummary,
+            updatedAt: new Date(),
+        };
+        this.orders.set(orderId, updated);
+        this.userRepository.incrementPoints(current.userId, current.pointsEarned);
+        return updated;
+    }
+
+    async markPaymentCancelled(
+        orderId: string,
+        paymentSummary: string,
+    ): Promise<Order | null> {
+        const current = this.orders.get(orderId);
+        if (!current) return null;
+        if (current.status !== "pending") return current;
+        const updated: Order = {
+            ...current,
+            status: "cancelled",
+            paymentSummary,
+            updatedAt: new Date(),
+        };
+        this.orders.set(orderId, updated);
+        return updated;
     }
 }
 
@@ -530,6 +640,51 @@ class InMemoryBookingRepository implements IBookingRepository {
         this.bookings.set(id, updated);
         return updated;
     }
+
+    async findAllForAdmin(filters: AdminBookingFilters = {}): Promise<Booking[]> {
+        let result = Array.from(this.bookings.values());
+        if (filters.date) {
+            result = result.filter((b) => b.date === filters.date);
+        }
+        if (filters.environment) {
+            result = result.filter((b) => b.environment === filters.environment);
+        }
+        if (filters.status) {
+            result = result.filter((b) => b.status === filters.status);
+        }
+        const sort = filters.sort ?? "earliest";
+        result.sort((a, b) => {
+            if (sort === "latest") {
+                return `${b.date}T${b.time}`.localeCompare(`${a.date}T${a.time}`);
+            }
+            if (sort === "diners-desc") {
+                return b.diners - a.diners;
+            }
+            return `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`);
+        });
+        return result;
+    }
+
+    async updateByAdmin(
+        id: string,
+        input: UpdateBookingAdminInput,
+    ): Promise<Booking> {
+        const current = this.bookings.get(id);
+        if (!current) throw new BookingNotFoundError();
+        const updated: Booking = {
+            ...current,
+            ...(input.environment !== undefined
+                ? { environment: input.environment }
+                : {}),
+            ...(input.date !== undefined ? { date: input.date } : {}),
+            ...(input.time !== undefined ? { time: input.time } : {}),
+            ...(input.diners !== undefined ? { diners: input.diners } : {}),
+            ...(input.status !== undefined ? { status: input.status } : {}),
+            updatedAt: new Date(),
+        };
+        this.bookings.set(id, updated);
+        return updated;
+    }
 }
 
 describe("Casa Flora Backend Clean Architecture & HTTP API", () => {
@@ -611,6 +766,14 @@ describe("Casa Flora Backend Clean Architecture & HTTP API", () => {
                 preferenceId: `pref-${input.externalReference}`,
                 checkoutUrl: `https://www.mercadopago.com.co/checkout/v1/redirect?pref_id=pref-${input.externalReference}`,
                 sandboxCheckoutUrl: `https://sandbox.mercadopago.com.co/checkout/v1/redirect?pref_id=pref-${input.externalReference}`,
+            }),
+            verifyPayment: async (input) => ({
+                status: input.paymentId === "999999" ? "approved" : "pending",
+                paymentId: input.paymentId ?? null,
+                paymentSummary:
+                    input.paymentId === "999999"
+                        ? "Mercado Pago (Visa **** 6260 • Aprobado)"
+                        : "Mercado Pago (Pendiente de pago)",
             }),
         };
 
@@ -867,11 +1030,17 @@ describe("Casa Flora Backend Clean Architecture & HTTP API", () => {
         const authDeliveryRes = await requestApp<{
             data: {
                 preferenceId: string;
+                externalReference: string;
                 checkoutUrl: string;
                 deliveryMethod: string;
                 addressLabel: string;
                 pointsEarned: number;
-                order: { id: string; addressLabel: string; paymentSummary: string } | null;
+                order: {
+                    id: string;
+                    status: string;
+                    addressLabel: string;
+                    paymentSummary: string;
+                } | null;
             };
         }>(app, "/api/orders/checkout", {
             method: "POST",
@@ -893,8 +1062,69 @@ describe("Casa Flora Backend Clean Architecture & HTTP API", () => {
         expect(authDeliveryRes.body.data.deliveryMethod).toBe("delivery");
         expect(authDeliveryRes.body.data.addressLabel).toContain("Carrera 43A # 14-50");
         expect(authDeliveryRes.body.data.order).not.toBeNull();
+        expect(authDeliveryRes.body.data.order?.status).toBe("pending");
         expect(authDeliveryRes.body.data.order?.paymentSummary).toBe(
-            "Mercado Pago Checkout Pro",
+            "Mercado Pago (Pendiente de pago)",
         );
+
+        const verifyRes = await requestApp<{
+            data: {
+                externalReference: string;
+                status: string;
+                paymentId: string | null;
+                paymentSummary: string;
+                order: { id: string; status: string; paymentSummary: string } | null;
+            };
+        }>(app, "/api/orders/checkout/verify", {
+            method: "POST",
+            headers: { Authorization: "Bearer token-customer" },
+            body: {
+                externalReference: authDeliveryRes.body.data.externalReference,
+                paymentId: "999999",
+            },
+        });
+        expect(verifyRes.status).toBe(200);
+        expect(verifyRes.body.data.status).toBe("approved");
+        expect(verifyRes.body.data.order?.status).toBe("preparing");
+        expect(verifyRes.body.data.order?.paymentSummary).toContain("Aprobado");
+
+        const customerAdminAttempt = await requestApp(app, "/api/orders/admin", {
+            headers: { Authorization: "Bearer token-customer" },
+        });
+        expect(customerAdminAttempt.status).toBe(403);
+
+        const adminOrdersRes = await requestApp<{
+            data: Array<{ id: string; status: string }>;
+        }>(app, "/api/orders/admin", {
+            headers: { Authorization: "Bearer token-admin" },
+        });
+        expect(adminOrdersRes.status).toBe(200);
+        expect(adminOrdersRes.body.data.length).toBeGreaterThan(0);
+
+        const orderIdToDone = authDeliveryRes.body.data.order?.id ?? "";
+        const markDoneRes = await requestApp<{
+            data: { id: string; status: string };
+        }>(app, `/api/orders/${orderIdToDone}/status`, {
+            method: "PATCH",
+            headers: { Authorization: "Bearer token-admin" },
+            body: { status: "delivered" },
+        });
+        expect(markDoneRes.status).toBe(200);
+        expect(markDoneRes.body.data.status).toBe("delivered");
+
+        const adminBookingsRes = await requestApp<{
+            data: Array<{ id: string; status: string }>;
+        }>(app, "/api/bookings/admin?sort=earliest", {
+            headers: { Authorization: "Bearer token-admin" },
+        });
+        expect(adminBookingsRes.status).toBe(200);
+
+        const adminProductsRes = await requestApp<{
+            data: Array<{ id: string; available: boolean }>;
+        }>(app, "/api/products/admin", {
+            headers: { Authorization: "Bearer token-admin" },
+        });
+        expect(adminProductsRes.status).toBe(200);
+        expect(adminProductsRes.body.data.length).toBeGreaterThanOrEqual(12);
     });
 });

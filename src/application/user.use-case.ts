@@ -26,6 +26,7 @@ import type {
     IUserRepository,
     UpdateUserProfileInput,
 } from "../domain/repository/IUser.repository.js";
+import type { IPaymentGateway } from "../infrastructure/services/payment.service.js";
 
 export interface UserProfileContext {
     user: User;
@@ -39,6 +40,7 @@ export class UserUseCase {
         private readonly userRepository: IUserRepository,
         private readonly productRepository?: IProductRepository,
         private readonly orderRepository?: IOrderRepository,
+        private readonly paymentGateway?: IPaymentGateway,
     ) {}
 
     async getProfile(userId: string): Promise<User> {
@@ -48,11 +50,45 @@ export class UserUseCase {
     }
 
     async getProfileContext(userId: string): Promise<UserProfileContext> {
-        const user = await this.getProfile(userId);
-        const [products, orders] = await Promise.all([
+        let user = await this.getProfile(userId);
+        let [products, orders] = await Promise.all([
             this.productRepository ? this.productRepository.findAll() : Promise.resolve([]),
             this.orderRepository ? this.orderRepository.findByUserId(userId) : Promise.resolve([]),
         ]);
+
+        if (this.orderRepository && this.paymentGateway) {
+            const pendingOrders = orders.filter((o) => o.status === "pending");
+            let changed = false;
+            for (const pending of pendingOrders) {
+                try {
+                    const verification = await this.paymentGateway.verifyPayment({
+                        externalReference: pending.id,
+                    });
+                    if (verification.status === "approved") {
+                        await this.orderRepository.confirmPaymentAndAwardPoints(
+                            pending.id,
+                            verification.paymentSummary,
+                        );
+                        changed = true;
+                    } else if (verification.status === "rejected") {
+                        await this.orderRepository.markPaymentCancelled(
+                            pending.id,
+                            verification.paymentSummary,
+                        );
+                        changed = true;
+                    }
+                } catch {
+                    void 0;
+                }
+            }
+
+            if (changed) {
+                [user, orders] = await Promise.all([
+                    this.getProfile(userId),
+                    this.orderRepository.findByUserId(userId),
+                ]);
+            }
+        }
 
         const loyalty = buildLoyaltySummary(user.points, user.dietPreference);
         const recommendedProduct = recommendProductForUser(products, {

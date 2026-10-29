@@ -9,8 +9,22 @@ export const TIME_SLOT_GROUPS = [
     { label: "Cena", slots: ["19:00", "20:30"] as const },
 ] as const;
 
-export const BOOKING_STATUSES = ["confirmed", "cancelled"] as const;
+export const BOOKING_STATUSES = [
+    "confirmed",
+    "seated",
+    "completed",
+    "no_show",
+    "cancelled",
+] as const;
 export type BookingStatus = (typeof BOOKING_STATUSES)[number];
+
+export const BOOKING_ADMIN_SORT_OPTIONS = [
+    "earliest",
+    "latest",
+    "diners-desc",
+] as const;
+export type BookingAdminSortOption =
+    (typeof BOOKING_ADMIN_SORT_OPTIONS)[number];
 
 export const MIN_DINERS = 1;
 export const MAX_DINERS = 10;
@@ -26,6 +40,19 @@ export const BOOKING_FIELD_MESSAGES: Record<BookingField, string> = {
     diners: "Número de comensales inválido.",
 };
 
+export interface BookingCustomerSummary {
+    id: string;
+    name: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    username: string | null;
+    points: number;
+    dietPreference: string | null;
+    spiceTolerance: string | null;
+    favoriteMoment: string | null;
+}
+
 export interface Booking {
     id: string;
     userId: string;
@@ -34,6 +61,7 @@ export interface Booking {
     time: BookingTimeSlot;
     diners: number;
     status: BookingStatus;
+    customer?: BookingCustomerSummary;
     createdAt: Date;
     updatedAt: Date;
 }

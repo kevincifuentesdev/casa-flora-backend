@@ -18,7 +18,11 @@ import {
     validateBookingDate,
 } from "../domain/models/booking.js";
 import type { UserRole } from "../domain/models/user.js";
-import type { IBookingRepository } from "../domain/repository/IBooking.repository.js";
+import type {
+    AdminBookingFilters,
+    IBookingRepository,
+    UpdateBookingAdminInput,
+} from "../domain/repository/IBooking.repository.js";
 
 export interface BookingCapacityConfig {
     interior: number;
@@ -91,6 +95,23 @@ export class BookingUseCase {
 
     async listUserBookings(userId: string): Promise<Booking[]> {
         return this.bookingRepository.findByUserId(userId);
+    }
+
+    async listAllBookingsForAdmin(
+        filters: AdminBookingFilters = {},
+    ): Promise<Booking[]> {
+        return this.bookingRepository.findAllForAdmin(filters);
+    }
+
+    async updateBookingByAdmin(
+        bookingId: string,
+        input: UpdateBookingAdminInput,
+    ): Promise<Booking> {
+        const existing = await this.bookingRepository.findById(bookingId);
+        if (!existing) {
+            throw new BookingNotFoundError();
+        }
+        return this.bookingRepository.updateByAdmin(bookingId, input);
     }
 
     async getBookingById(

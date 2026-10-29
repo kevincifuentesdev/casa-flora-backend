@@ -22,6 +22,12 @@ export function createProductRouter(
     const router = Router();
 
     router.get("/", validateQuery(productQueryDtoSchema), productController.listProducts);
+    router.get(
+        "/admin",
+        authMiddleware.requireAdmin,
+        validateQuery(productQueryDtoSchema),
+        productController.listAdminProducts,
+    );
     router.get("/:id", validateParams(productIdParamDtoSchema), productController.getProductById);
 
     router.post(

@@ -1,5 +1,6 @@
 import type {
     Booking,
+    BookingAdminSortOption,
     BookingStatus,
     BookingTimeSlot,
     EnvironmentId,
@@ -17,11 +18,30 @@ export interface ReserveBookingAtomicInput extends CreateBookingInput {
     capacity: number;
 }
 
+export interface AdminBookingFilters {
+    date?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    environment?: EnvironmentId;
+    status?: BookingStatus;
+    search?: string;
+    sort?: BookingAdminSortOption;
+}
+
+export interface UpdateBookingAdminInput {
+    environment?: EnvironmentId;
+    date?: string;
+    time?: BookingTimeSlot;
+    diners?: number;
+    status?: BookingStatus;
+}
+
 export interface IBookingRepository {
     create(input: CreateBookingInput): Promise<Booking>;
     createConfirmedWithinCapacity(input: ReserveBookingAtomicInput): Promise<Booking>;
     findById(id: string): Promise<Booking | null>;
     findByUserId(userId: string): Promise<Booking[]>;
+    findAllForAdmin(filters?: AdminBookingFilters): Promise<Booking[]>;
     findActiveByUserSlot(
         userId: string,
         date: string,
@@ -37,5 +57,6 @@ export interface IBookingRepository {
         environment: EnvironmentId,
     ): Promise<Record<BookingTimeSlot, number>>;
     updateStatus(id: string, status: BookingStatus): Promise<Booking>;
+    updateByAdmin(id: string, input: UpdateBookingAdminInput): Promise<Booking>;
 }
 
