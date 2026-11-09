@@ -70,6 +70,7 @@ import type {
 import type { AuthService } from "../src/infrastructure/services/auth.service.js";
 import { parseEnv } from "../src/infrastructure/services/env.service.js";
 import type { IPaymentGateway } from "../src/infrastructure/services/payment.service.js";
+import { metricsRegistry } from "../src/infrastructure/services/metrics.service.js";
 
 interface TestResponse<T = unknown> {
     status: number;
@@ -831,6 +832,23 @@ describe("Casa Flora Backend Clean Architecture & HTTP API", () => {
         expect(res.headers["access-control-allow-origin"]).toBe("http://localhost:3000");
         expect(res.headers["x-content-type-options"]).toBe("nosniff");
         expect(res.body.status).toBe("ok");
+    });
+
+    it("generates monitoring INFO and ERROR events and exposes Prometheus metrics", async () => {
+        const infoRes = await requestApp<{ message: string }>(app, "/api/monitoring/info");
+        const errorRes = await requestApp<{ error: { code: string } }>(
+            app,
+            "/api/monitoring/error",
+        );
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        const metrics = await metricsRegistry.metrics();
+
+        expect(infoRes.status).toBe(200);
+        expect(infoRes.body.message).toBe("INFO log generated");
+        expect(errorRes.status).toBe(500);
+        expect(errorRes.body.error.code).toBe("MONITORING_ERROR_DEMO");
+        expect(metrics).toContain("casa_flora_http_requests_total");
+        expect(metrics).toContain("casa_flora_http_request_duration_seconds");
     });
 
     it("handles requests with or without /api prefix and root status", async () => {

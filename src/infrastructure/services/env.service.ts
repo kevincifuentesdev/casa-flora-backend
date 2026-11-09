@@ -7,6 +7,9 @@ const envSchema = z
     .object({
         NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
         PORT: z.coerce.number().int().min(1).max(65535).default(4000),
+        APPLICATION_NAME: z.string().min(1).default("casa-flora-backend"),
+        LOGSTASH_HOST: z.string().min(1).optional(),
+        LOGSTASH_PORT: z.coerce.number().int().min(1).max(65535).default(5001),
 
         DATABASE_URL: z
             .string()

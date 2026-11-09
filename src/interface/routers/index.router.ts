@@ -6,6 +6,7 @@ import type { ProductController } from "../controllers/product.controller.js";
 import type { UploadController } from "../controllers/upload.controller.js";
 import type { UserController } from "../controllers/user.controller.js";
 import type { AuthMiddleware } from "../middlewares/auth.middleware.js";
+import type { LoggerService } from "../../infrastructure/services/logger.service.js";
 import { createBookingRouter } from "./booking.router.js";
 import { createOrderRouter } from "./order.router.js";
 import { createProductRouter } from "./product.router.js";
@@ -20,6 +21,7 @@ export interface ApiRouterDependencies {
     orderController?: OrderController;
     authMiddleware: AuthMiddleware;
     writeRateLimiter: RequestHandler;
+    logger?: LoggerService;
 }
 
 export function createApiRouter(deps: ApiRouterDependencies): Router {
@@ -31,6 +33,25 @@ export function createApiRouter(deps: ApiRouterDependencies): Router {
             service: "casa-flora-backend",
             version: "0.1.2",
             timestamp: new Date().toISOString(),
+        });
+    });
+
+    router.get("/monitoring/info", (_req, res) => {
+        deps.logger?.info("Monitoring INFO demonstration endpoint called", {
+            endpoint: "/api/monitoring/info",
+        });
+        res.status(200).json({ status: "ok", message: "INFO log generated" });
+    });
+
+    router.get("/monitoring/error", (_req, res) => {
+        deps.logger?.error("Monitoring ERROR demonstration endpoint called", {
+            endpoint: "/api/monitoring/error",
+        });
+        res.status(500).json({
+            error: {
+                code: "MONITORING_ERROR_DEMO",
+                message: "ERROR log generated for monitoring evidence.",
+            },
         });
     });
 

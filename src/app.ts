@@ -20,6 +20,7 @@ import {
     S3StorageService,
 } from "./infrastructure/services/storage.service.js";
 import { LoggerService } from "./infrastructure/services/logger.service.js";
+import { metricsHandler, metricsMiddleware } from "./infrastructure/services/metrics.service.js";
 import {
     type IPaymentGateway,
     MercadoPagoGateway,
@@ -61,7 +62,13 @@ export function normalizeApiPath(req: Request): void {
 
 export function createApp(deps: AppDependencies): Express {
     const app = express();
-    const logger = deps.logger ?? new LoggerService(deps.env.NODE_ENV === "test");
+    const logger =
+        deps.logger ??
+        new LoggerService(deps.env.NODE_ENV === "test", {
+            application: deps.env.APPLICATION_NAME,
+            logstashHost: deps.env.LOGSTASH_HOST,
+            logstashPort: deps.env.LOGSTASH_PORT,
+        });
 
     app.disable("x-powered-by");
     if (deps.env.TRUST_PROXY || process.env.VERCEL === "1" || deps.env.NODE_ENV === "production") {
@@ -79,6 +86,9 @@ export function createApp(deps: AppDependencies): Express {
     app.use(security.corsMiddleware);
     app.use(security.clientIpMiddleware);
     app.use(security.apiRateLimiter);
+    app.use(metricsMiddleware);
+
+    app.get("/api/metrics", metricsHandler);
 
     app.get("/", (_req, res) => {
         res.status(200).json({
@@ -131,6 +141,7 @@ export function createApp(deps: AppDependencies): Express {
             ...(orderController ? { orderController } : {}),
             authMiddleware,
             writeRateLimiter: security.writeRateLimiter,
+            logger,
         }),
     );
 

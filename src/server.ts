@@ -8,10 +8,13 @@ import { AuthService, createAuth } from "./infrastructure/services/auth.service.
 import { parseEnv } from "./infrastructure/services/env.service.js";
 import { LoggerService } from "./infrastructure/services/logger.service.js";
 
-const logger = new LoggerService(false);
-
 async function bootstrap(): Promise<void> {
     const env = parseEnv();
+    const logger = new LoggerService(false, {
+        application: env.APPLICATION_NAME,
+        logstashHost: env.LOGSTASH_HOST,
+        logstashPort: env.LOGSTASH_PORT,
+    });
     const prisma = createPrismaClient(env.DATABASE_URL);
     const auth = createAuth(prisma, env);
     const authService = new AuthService(auth, prisma);
@@ -51,6 +54,7 @@ async function bootstrap(): Promise<void> {
 }
 
 bootstrap().catch((error: unknown) => {
+    const logger = new LoggerService(false);
     logger.error("Failed to start server", {
         error: error instanceof Error ? error.message : String(error),
     });
